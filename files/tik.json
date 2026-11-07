@@ -1,0 +1,24 @@
+{
+  "settings": {
+    "maxEnergy": 15,
+    "room1X": 935,
+    "room2X": 2905,
+    "fadeSpeed": 2.5
+  },
+  "shop": {
+    "currencyLabel": "ТАЛОНЫ",
+    "coffeePrice": 3,
+    "coffeeRestore": 15,
+    "catFoodPrice": 2,
+    "catFoodMax": 5
+  },
+  "texts": {
+    "radioCall": "Звонок Nº 1",
+    "devicePlaceholder": "Прибор {0}: ...",
+    "noEnergy": "Недостаточно энергии. Нужен кофе или отдых.",
+    "noMoney": "Не хватает талонов",
+    "coffeeBought": "Кофе куплен — он на второй панели",
+    "catFoodBought": "Корм куплен",
+    "catFoodFull": "Запас корма полон"
+  }
+}

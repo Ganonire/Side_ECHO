@@ -1,0 +1,10 @@
+{
+	"name": "shopMessageText",
+	"plugin-id": "Text",
+	"sid": 283374811453162,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": [],
+	"effectTypes": []
+}

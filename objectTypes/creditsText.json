@@ -1,0 +1,10 @@
+{
+	"name": "creditsText",
+	"plugin-id": "Text",
+	"sid": 819593532499168,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": [],
+	"effectTypes": []
+}

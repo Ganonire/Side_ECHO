@@ -1,0 +1,9 @@
+{
+	"name": "shopCloseButton",
+	"plugin-id": "Button",
+	"sid": 695338966603797,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

@@ -1,0 +1,10 @@
+{
+	"name": "shopCreditsText",
+	"plugin-id": "Text",
+	"sid": 384550197920737,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": [],
+	"effectTypes": []
+}

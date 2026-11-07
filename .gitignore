@@ -1,0 +1,6 @@
+*.uistate
+*.uistate.json
+*_autosave_.c3p
+*.c3p
+.DS_Store
+Thumbs.db

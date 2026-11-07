@@ -1,0 +1,9 @@
+{
+	"name": "energyButton2",
+	"plugin-id": "Button",
+	"sid": 148008939335739,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

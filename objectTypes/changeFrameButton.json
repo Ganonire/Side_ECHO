@@ -1,0 +1,15 @@
+{
+	"name": "changeFrameButton",
+	"plugin-id": "Button",
+	"sid": 435588972782974,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": [
+		{
+			"behaviorId": "Anchor",
+			"name": "Anchor",
+			"sid": 811365695539838
+		}
+	]
+}

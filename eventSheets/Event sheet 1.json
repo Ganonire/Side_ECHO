@@ -1,0 +1,434 @@
+{
+	"name": "Event sheet 1",
+	"events": [
+		{
+			"eventType": "variable",
+			"name": "musicStarted",
+			"type": "number",
+			"initialValue": "0",
+			"comment": "",
+			"isStatic": false,
+			"isConstant": false,
+			"sid": 814982275371111
+		},
+		{
+			"eventType": "variable",
+			"name": "isTransitioning",
+			"type": "number",
+			"initialValue": "0",
+			"comment": "",
+			"isStatic": false,
+			"isConstant": false,
+			"sid": 560421011968515
+		},
+		{
+			"eventType": "variable",
+			"name": "shopOpen",
+			"type": "number",
+			"initialValue": "0",
+			"comment": "",
+			"isStatic": false,
+			"isConstant": false,
+			"sid": 391695621750369
+		},
+		{
+			"eventType": "variable",
+			"name": "roomSelect",
+			"type": "number",
+			"initialValue": "0",
+			"comment": "",
+			"isStatic": false,
+			"isConstant": false,
+			"sid": 584719097620045
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-any-click",
+					"objectClass": "Mouse",
+					"sid": 920798559886522
+				},
+				{
+					"id": "compare-eventvar",
+					"objectClass": "System",
+					"sid": 645692545742617,
+					"parameters": {
+						"variable": "musicStarted",
+						"comparison": 0,
+						"value": "0"
+					}
+				}
+			],
+			"actions": [
+				{
+					"id": "play",
+					"objectClass": "Audio",
+					"sid": 939202621566034,
+					"parameters": {
+						"audio-file": {
+							"path": "8597bb02c2b2555"
+						},
+						"loop": "looping",
+						"volume": "-13",
+						"stereo-pan": "0",
+						"tag-optional": "\"\""
+					}
+				},
+				{
+					"id": "set-eventvar-value",
+					"objectClass": "System",
+					"sid": 566436274864032,
+					"parameters": {
+						"variable": "musicStarted",
+						"value": "1"
+					}
+				}
+			],
+			"sid": 900057747153885
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "shopButton",
+					"sid": 928285826022366
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 855237660492801
+				}
+			],
+			"sid": 896992073657996
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "shopCloseButton",
+					"sid": 641243255510735
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 377014539639001
+				}
+			],
+			"sid": 297339858549946
+		},
+		{
+			"functionName": "PlayClick",
+			"functionDescription": "",
+			"functionCategory": "",
+			"functionReturnType": "none",
+			"functionCopyPicked": false,
+			"functionIsAsync": false,
+			"functionParameters": [],
+			"eventType": "function-block",
+			"conditions": [],
+			"actions": [
+				{
+					"id": "play",
+					"objectClass": "Audio",
+					"sid": 538285428897973,
+					"parameters": {
+						"audio-file": {
+							"path": "off-button-on-table-lamp"
+						},
+						"loop": "not-looping",
+						"volume": "0",
+						"stereo-pan": "0",
+						"tag-optional": "\"\""
+					}
+				}
+			],
+			"sid": 359961618584540
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "coffeeButton",
+					"sid": 441541085127441
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 459938296586918
+				}
+			],
+			"sid": 764163196563268
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "shopCatFoodBuyButton",
+					"sid": 661328380663942
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 943901523700320
+				}
+			],
+			"sid": 708173344904887
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "shopCoffeeBuyButton",
+					"sid": 922370942781987
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 939655239546438
+				}
+			],
+			"sid": 308299758044728
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "energyButton",
+					"sid": 496286923614948
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 359275046262222
+				}
+			],
+			"sid": 448872050240302
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "energyButton2",
+					"sid": 930801935708312
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 617778967903104
+				}
+			],
+			"sid": 317302557971534
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "energyButton3",
+					"sid": 964720911456660
+				}
+			],
+			"actions": [
+				{
+					"callFunction": "PlayClick",
+					"sid": 111204641979980
+				}
+			],
+			"sid": 250024550939054
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "changeFrameButton",
+					"sid": 481675523595504
+				},
+				{
+					"id": "compare-eventvar",
+					"objectClass": "System",
+					"sid": 415694833106756,
+					"parameters": {
+						"variable": "isTransitioning",
+						"comparison": 0,
+						"value": "0"
+					}
+				},
+				{
+					"id": "compare-eventvar",
+					"objectClass": "System",
+					"sid": 509862330822459,
+					"parameters": {
+						"variable": "shopOpen",
+						"comparison": 0,
+						"value": "0"
+					}
+				}
+			],
+			"actions": [
+				{
+					"id": "set-eventvar-value",
+					"objectClass": "System",
+					"sid": 718895032723088,
+					"parameters": {
+						"variable": "isTransitioning",
+						"value": "1"
+					}
+				},
+				{
+					"id": "tween-one-property",
+					"objectClass": "blackBlock",
+					"sid": 137798391103694,
+					"behaviorType": "Tween",
+					"parameters": {
+						"tags": "\"FadeOut\"",
+						"property": "offsetOpacity",
+						"end-value": "100",
+						"time": "0.3",
+						"ease": "easeinoutsine",
+						"destroy-on-complete": "no",
+						"loop": "no",
+						"ping-pong": "no",
+						"repeat-count": "1"
+					}
+				}
+			],
+			"sid": 153445243798020
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-tweens-finished",
+					"objectClass": "blackBlock",
+					"sid": 158688632055862,
+					"behaviorType": "Tween",
+					"parameters": {
+						"tags": "\"FadeOut\""
+					}
+				}
+			],
+			"actions": [
+				{
+					"id": "set-eventvar-value",
+					"objectClass": "System",
+					"sid": 764300210010898,
+					"parameters": {
+						"variable": "roomSelect",
+						"value": "1 - roomSelect"
+					}
+				},
+				{
+					"id": "set-x",
+					"objectClass": "cameraObj",
+					"sid": 248248315153800,
+					"parameters": {
+						"x": "roomSelect = 1 ? 2905 : 935"
+					}
+				},
+				{
+					"id": "tween-one-property",
+					"objectClass": "blackBlock",
+					"sid": 336461016656207,
+					"behaviorType": "Tween",
+					"parameters": {
+						"tags": "\"FadeIn\"",
+						"property": "offsetOpacity",
+						"end-value": "0",
+						"time": "0.3",
+						"ease": "default",
+						"destroy-on-complete": "no",
+						"loop": "no",
+						"ping-pong": "no",
+						"repeat-count": "1"
+					}
+				}
+			],
+			"sid": 966445323519468
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-tweens-finished",
+					"objectClass": "blackBlock",
+					"sid": 725276648881828,
+					"behaviorType": "Tween",
+					"parameters": {
+						"tags": "\"FadeIn\""
+					}
+				}
+			],
+			"actions": [
+				{
+					"id": "set-eventvar-value",
+					"objectClass": "System",
+					"sid": 795752202385280,
+					"parameters": {
+						"variable": "isTransitioning",
+						"value": "0"
+					}
+				}
+			],
+			"sid": 996616964985691
+		},
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "energyButton",
+					"sid": 187979813305711
+				},
+				{
+					"id": "compare-eventvar",
+					"objectClass": "System",
+					"sid": 210728438071545,
+					"parameters": {
+						"variable": "isTransitioning",
+						"comparison": 0,
+						"value": "0"
+					}
+				},
+				{
+					"id": "compare-eventvar",
+					"objectClass": "System",
+					"sid": 534310152366384,
+					"parameters": {
+						"variable": "shopOpen",
+						"comparison": 0,
+						"value": "0"
+					}
+				},
+				{
+					"id": "compare-instance-variable",
+					"objectClass": "varManager",
+					"sid": 957794041138701,
+					"parameters": {
+						"instance-variable": "Energy",
+						"comparison": 3,
+						"value": "0"
+					}
+				}
+			],
+			"actions": [],
+			"sid": 753473272856834
+		}
+	],
+	"sid": 387999711721220
+}

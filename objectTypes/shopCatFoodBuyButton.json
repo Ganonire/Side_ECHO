@@ -1,0 +1,9 @@
+{
+	"name": "shopCatFoodBuyButton",
+	"plugin-id": "Button",
+	"sid": 628755118642510,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}
