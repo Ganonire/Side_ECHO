@@ -1,0 +1,9 @@
+{
+	"name": "hintCloseButton",
+	"plugin-id": "Button",
+	"sid": 703329368012128,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

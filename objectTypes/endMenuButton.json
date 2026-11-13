@@ -1,0 +1,9 @@
+{
+	"name": "endMenuButton",
+	"plugin-id": "Button",
+	"sid": 888981189223387,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

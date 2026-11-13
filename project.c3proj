@@ -9,70 +9,70 @@
 		{
 			"type": "plugin",
 			"id": "Audio",
-			"name": "Audio",
+			"name": "Аудио",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Browser",
-			"name": "Browser",
+			"name": "Браузер",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Button",
-			"name": "Button",
+			"name": "Кнопка",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Mouse",
-			"name": "Mouse",
+			"name": "Мышь",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Sprite",
-			"name": "Sprite",
+			"name": "Спрайт",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Text",
-			"name": "Text",
+			"name": "Текст",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "TiledBg",
-			"name": "Tiled Background",
+			"name": "Тайловый фон",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "behavior",
 			"id": "Anchor",
-			"name": "Anchor",
+			"name": "Якорь",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "behavior",
 			"id": "Tween",
-			"name": "Tween",
+			"name": "Твин-анимация",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "behavior",
 			"id": "scrollto",
-			"name": "Scroll To",
+			"name": "Следить за",
 			"author": "Scirra",
 			"bundled": false
 		}
@@ -117,7 +117,21 @@
 			"dialogText",
 			"Mouse",
 			"Function_call",
-			"Browser"
+			"Browser",
+			"endPanel",
+			"endTitleText",
+			"endArrivedText",
+			"endLostText",
+			"endZonesText",
+			"endEchoText",
+			"endEnergyText",
+			"endMenuButton",
+			"hintText",
+			"hintPanel",
+			"hintCloseButton",
+			"settingsButton",
+			"hintButton",
+			"endTempButton"
 		],
 		"subfolders": []
 	},

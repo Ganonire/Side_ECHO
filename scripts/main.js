@@ -3,6 +3,7 @@
 // Логика UI, магазина, списка и вкладок. 
 // Переходы, звук и глобальные состояния (isTransitioning, shopOpen) 
 // управляются через Event Sheet Construct 3.
+// Плюс: кнопки «Настройки»/«Подсказка», окно подсказки и конечный экран.
 // ================================================================
 
 runOnStartup(runtime => {
@@ -39,6 +40,14 @@ runOnStartup(runtime => {
         const dialogText = getOne("dialogText");
         const dialogTabRadio = getOne("dialogTabRadio");
         const dialogTabDevices = getOne("dialogTabDevices");
+        const cameraObj = getOne("cameraObj");
+
+        // HUD-кнопки, окно подсказки и конечный экран.
+        const settingsButton = getOne("settingsButton");
+        const hintButton = getOne("hintButton");
+        const hintCloseButton = getOne("hintCloseButton");
+        const endMenuButton = getOne("endMenuButton");
+        const endTempButton = getOne("endTempButton");
         const energySegments = getAll("energySegment").sort((a, b) => a.x - b.x);
 
         // Настройки
@@ -169,9 +178,163 @@ runOnStartup(runtime => {
         }
 
         // ------------------------------------------------------------
+        // HUD-КНОПКИ, ПОДСКАЗКА И КОНЕЧНЫЙ ЭКРАН
+        // ------------------------------------------------------------
+        // Макет стартового меню. Пока его нет — кнопки просто пишут
+        // предупреждение в консоль. Имя меняется в tik.json (ui.startMenuLayout).
+        const START_MENU_LAYOUT = config.ui?.startMenuLayout ?? "StartMenu";
+        const endText = {
+            title: config.end?.title ?? "ИТОГИ СМЕНЫ",
+            arrived: config.end?.arrived ?? "Курьеров дошло",
+            lost: config.end?.lost ?? "Курьеров потеряно",
+            zonesLost: config.end?.zonesLost ?? "Зон потеряно",
+            echoTalks: config.end?.echoTalks ?? "Разговоров с Эхо",
+            energySpent: config.end?.energySpent ?? "Энергии потрачено"
+        };
+
+        // Поля конечного экрана: объект -> что показывать (переменная varManager).
+        const endFields = [
+            ["endArrivedText", endText.arrived, "CouriersArrived"],
+            ["endLostText", endText.lost, "CouriersLost"],
+            ["endZonesText", endText.zonesLost, "ZonesLost"],
+            ["endEchoText", endText.echoTalks, "EchoTalks"],
+            ["endEnergyText", endText.energySpent, "EnergySpent"]
+        ].map(([name, label, varName]) => ({ obj: getOne(name), label, varName }));
+        const endTitleText = getOne("endTitleText");
+
+        const hintParts = ["hintPanel", "hintText", "hintCloseButton"].flatMap(getAll);
+        const endParts = ["endPanel", "endTitleText", "endArrivedText", "endLostText",
+                          "endZonesText", "endEchoText", "endEnergyText", "endMenuButton"].flatMap(getAll);
+
+        // HUD-кнопки и окна привязаны к ВИДИМОЙ области экрана, а не к
+        // точке cameraObj: макет ограничен по краям (прокрутка не выходит за
+        // его границы), поэтому реальный центр экрана может отличаться от
+        // cameraObj.x. Раскладка рисовалась вокруг центра (935, 540).
+        const DESIGN_CX = 935;
+        const DESIGN_CY = 540;
+        const hudButtons = [settingsButton, hintButton].filter(Boolean);
+        const followParts = [...hudButtons, ...hintParts, ...endParts];
+        const followOffsets = new Map(
+            followParts.map(o => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }])
+        );
+        const fullscreenPanels = [...getAll("hintPanel"), ...getAll("endPanel")];
+
+        // Видимая область слоя в координатах слоя: центр и размер.
+        function viewRect(layer) {
+            try {
+                const vp = layer.getViewport();
+                return { cx: vp.left + vp.width / 2, cy: vp.top + vp.height / 2, w: vp.width, h: vp.height };
+            } catch (e) {
+                // Запасной вариант: центр камеры, зажатый в границы макета.
+                const hw = 960, hh = 540;
+                const cx = cameraObj ? cameraObj.x : DESIGN_CX;
+                const cy = cameraObj ? cameraObj.y : DESIGN_CY;
+                return {
+                    cx: Math.min(Math.max(cx, hw), runtime.layout.width - hw),
+                    cy: Math.min(Math.max(cy, hh), runtime.layout.height - hh),
+                    w: 1920, h: 1080
+                };
+            }
+        }
+
+        function placeInView(obj) {
+            const view = viewRect(obj.layer);
+            const off = followOffsets.get(obj);
+            obj.x = view.cx + off.dx;
+            obj.y = view.cy + off.dy;
+            // Полноэкранные панели растягиваем на всю видимую область.
+            if (fullscreenPanels.includes(obj)) {
+                obj.width = view.w + 4;
+                obj.height = view.h + 4;
+            }
+        }
+
+        // HTML-кнопки рисуются поверх всего, поэтому пока открыт полноэкранный
+        // экран, прячем их и потом возвращаем в прежнее состояние.
+        const gameDomButtons = [
+            ...energyButtons, getOne("changeFrameButton"), coffeeButton, shopButton,
+            shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton,
+            settingsButton, hintButton, endTempButton
+        ].filter(Boolean);
+        const savedDomVisibility = new Map();
+        let overlay = null; // null | "hint" | "end"
+
+        function openOverlay(kind, parts) {
+            if (overlay || runtime.globalVars.isTransitioning === 1) return false;
+            overlay = kind;
+            gameDomButtons.forEach(b => { savedDomVisibility.set(b, b.isVisible); b.isVisible = false; });
+            parts.forEach(p => { placeInView(p); p.isVisible = true; });
+            return true;
+        }
+
+        function closeOverlay(kind, parts) {
+            if (overlay !== kind) return;
+            parts.forEach(p => { p.isVisible = false; });
+            gameDomButtons.forEach(b => {
+                b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
+            });
+            overlay = null;
+        }
+
+        const playClick = () => { try { runtime.callFunction("PlayClick"); } catch (e) { /* функции нет — без звука */ } };
+
+        function goToStartMenu() {
+            let exists = false;
+            try { exists = !!runtime.getLayout(START_MENU_LAYOUT); } catch (e) { exists = false; }
+            if (!exists) {
+                console.warn(`Стартовое меню (макет "${START_MENU_LAYOUT}") ещё не создано.`);
+                return false;
+            }
+            runtime.goToLayout(START_MENU_LAYOUT);
+            return true;
+        }
+
+        const openHint = () => openOverlay("hint", hintParts);
+        const closeHint = () => closeOverlay("hint", hintParts);
+
+        function openEndScreen() {
+            if (!openOverlay("end", endParts)) return;
+            if (endTitleText) endTitleText.text = endText.title;
+            endFields.forEach(f => {
+                if (f.obj) f.obj.text = `${f.label}: ${varManager.instVars[f.varName]}`;
+            });
+        }
+        const closeEndScreen = () => closeOverlay("end", endParts);
+
+        // Скрыто до открытия.
+        hintParts.forEach(p => { p.isVisible = false; });
+        endParts.forEach(p => { p.isVisible = false; });
+
+        if (settingsButton) settingsButton.addEventListener("click", () => {
+            if (overlay || runtime.globalVars.isTransitioning === 1) return;
+            playClick();
+            goToStartMenu();
+        });
+        if (hintButton) hintButton.addEventListener("click", () => {
+            if (overlay || runtime.globalVars.isTransitioning === 1) return;
+            playClick();
+            openHint();
+        });
+        if (hintCloseButton) hintCloseButton.addEventListener("click", () => { playClick(); closeHint(); });
+
+        // Временный выход на конечный экран — во второй комнате.
+        if (endTempButton) endTempButton.addEventListener("click", () => {
+            if (overlay || runtime.globalVars.isTransitioning === 1) return;
+            playClick();
+            openEndScreen();
+        });
+        if (endMenuButton) endMenuButton.addEventListener("click", () => {
+            playClick();
+            // Пока стартового меню нет — просто возвращаемся в игру.
+            if (!goToStartMenu()) closeEndScreen();
+        });
+
+        // ------------------------------------------------------------
         // TICK (Обновление UI)
         // ------------------------------------------------------------
         runtime.addEventListener("tick2", () => {
+            // HUD-кнопки следуют за камерой (правый верхний угол в любой комнате).
+            hudButtons.forEach(placeInView);
             if (varManager.instVars.Energy !== lastDisplayedEnergy) updateEnergyUI();
             if (varManager.instVars.Credits !== lastDisplayedCredits) updateCreditsUI();
         });
@@ -215,7 +378,10 @@ runOnStartup(runtime => {
 
         // Закрытие магазина на Esc
         runtime.addEventListener("keydown", (e) => { 
-            if (e.key === "Escape") closeShop(); 
+            if (e.key !== "Escape") return;
+            if (overlay === "hint") { closeHint(); return; }
+            if (overlay) return;
+            closeShop(); 
         });
         
         shopParts.forEach(p => { p.isVisible = false; });
@@ -251,6 +417,7 @@ runOnStartup(runtime => {
                 }
                 showDevice(index);
                 varManager.instVars.Energy -= 1;
+                varManager.instVars.EnergySpent += 1; // для конечного экрана
                 updateEnergyUI();
             });
         });
@@ -280,6 +447,7 @@ runOnStartup(runtime => {
         runtime.addEventListener("pointerdown", (e) => {
             if (runtime.globalVars.isTransitioning === 1) return;
             if (runtime.globalVars.shopOpen === 1) return;
+            if (overlay) return;
 
             if (isPointerOver(listButton, e.clientX, e.clientY)) {
                 const expanded = !listPanel.isVisible;
@@ -320,7 +488,9 @@ runOnStartup(runtime => {
             config: config,
             addCredits: (amt) => { varManager.instVars.Credits += amt; updateCreditsUI(); }, 
             spendCredits: (amt) => { varManager.instVars.Credits -= amt; updateCreditsUI(); }, 
-            openShop, closeShop 
+            openShop, closeShop, openHint, closeHint, openEndScreen,
+            // Статистика для конечного экрана: addStat("CouriersArrived") и т.д.
+            addStat: (name, amt = 1) => { varManager.instVars[name] += amt; }, 
         };
     });
 });

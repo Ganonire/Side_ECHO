@@ -1,0 +1,9 @@
+{
+	"name": "hintButton",
+	"plugin-id": "Button",
+	"sid": 375782430635761,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

@@ -1,0 +1,9 @@
+{
+	"name": "settingsButton",
+	"plugin-id": "Button",
+	"sid": 627732943318598,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

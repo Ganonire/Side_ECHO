@@ -32,6 +32,41 @@
 			"desc": "",
 			"show": true,
 			"sid": 582194513550296
+		},
+		{
+			"name": "CouriersArrived",
+			"type": "number",
+			"desc": "",
+			"show": true,
+			"sid": 614784160860097
+		},
+		{
+			"name": "CouriersLost",
+			"type": "number",
+			"desc": "",
+			"show": true,
+			"sid": 713165939913564
+		},
+		{
+			"name": "ZonesLost",
+			"type": "number",
+			"desc": "",
+			"show": true,
+			"sid": 491498367864277
+		},
+		{
+			"name": "EchoTalks",
+			"type": "number",
+			"desc": "",
+			"show": true,
+			"sid": 277209309188103
+		},
+		{
+			"name": "EnergySpent",
+			"type": "number",
+			"desc": "",
+			"show": true,
+			"sid": 374561940819552
 		}
 	],
 	"behaviorTypes": [],

@@ -1,0 +1,9 @@
+{
+	"name": "endTempButton",
+	"plugin-id": "Button",
+	"sid": 107691173548436,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

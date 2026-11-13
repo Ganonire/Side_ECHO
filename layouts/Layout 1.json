@@ -34,10 +34,10 @@
 					"showing": true,
 					"locked": false,
 					"world": {
-						"x": 5.869171142578125,
-						"y": 14.67230224609375,
-						"width": 3829,
-						"height": 1065,
+						"x": -9.130828857421875,
+						"y": -3.32769775390625,
+						"width": 3849,
+						"height": 1088,
 						"originX": 0,
 						"originY": 0,
 						"color": [
@@ -302,7 +302,12 @@
 						"Energy": 15,
 						"roomSelect": false,
 						"Credits": 5,
-						"CatFood": 0
+						"CatFood": 0,
+						"CouriersArrived": 0,
+						"CouriersLost": 0,
+						"ZonesLost": 0,
+						"EchoTalks": 0,
+						"EnergySpent": 0
 					},
 					"behaviors": {},
 					"materialSurfaceType": "smooth",
@@ -1466,7 +1471,7 @@
 					"locked": false,
 					"world": {
 						"x": 3497,
-						"y": 63,
+						"y": 97,
 						"width": 250,
 						"height": 80,
 						"originX": 0,
@@ -1951,6 +1956,76 @@
 						"z": 0,
 						"angle": 0
 					}
+				},
+				{
+					"type": "settingsButton",
+					"properties": {
+						"type": "button",
+						"text": "Настройки",
+						"tooltip": "",
+						"initially-visible": true,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 64,
+					"sid": 509980898813254,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 1642,
+						"y": 29,
+						"width": 210,
+						"height": 50,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
+					}
+				},
+				{
+					"type": "hintButton",
+					"properties": {
+						"type": "button",
+						"text": "Подсказка",
+						"tooltip": "",
+						"initially-visible": true,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 65,
+					"sid": 743085158220489,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 1422,
+						"y": 29,
+						"width": 210,
+						"height": 50,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
+					}
 				}
 			],
 			"sid": 587639621549370,
@@ -1989,6 +2064,125 @@
 			"subLayers": [],
 			"instances": [
 				{
+					"type": "hintPanel",
+					"properties": {
+						"initially-visible": false,
+						"initial-animation": "Animation 1",
+						"initial-frame": 0,
+						"enable-collisions": true,
+						"live-preview": false
+					},
+					"uid": 61,
+					"sid": 259008659345507,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 936,
+						"y": 539,
+						"width": 1920,
+						"height": 1080,
+						"originX": 0.5,
+						"originY": 0.5,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "hintText",
+					"properties": {
+						"text": "",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 40,
+						"line-height": 0,
+						"bold": false,
+						"italic": false,
+						"color": [
+							0.9,
+							0.95,
+							0.9,
+							1
+						],
+						"horizontal-alignment": "left",
+						"vertical-alignment": "top",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 62,
+					"sid": 456934435323078,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 96,
+						"y": 139,
+						"width": 1680,
+						"height": 800,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "hintCloseButton",
+					"properties": {
+						"type": "button",
+						"text": "X",
+						"tooltip": "",
+						"initially-visible": false,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 63,
+					"sid": 839033356491874,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 1766,
+						"y": 39,
+						"width": 90,
+						"height": 90,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
+					}
+				},
+				{
 					"type": "blackBlock",
 					"properties": {
 						"initially-visible": true,
@@ -2012,8 +2206,8 @@
 					"showing": true,
 					"locked": false,
 					"world": {
-						"x": 1968,
-						"y": 581,
+						"x": 1910,
+						"y": 563,
 						"width": 4051.9999999999995,
 						"height": 1537,
 						"originX": 0.5,
@@ -2026,6 +2220,410 @@
 						],
 						"z": 0,
 						"angle": 0
+					}
+				},
+				{
+					"type": "endPanel",
+					"properties": {
+						"initially-visible": false,
+						"initial-animation": "Animation 1",
+						"initial-frame": 0,
+						"enable-collisions": true,
+						"live-preview": false
+					},
+					"uid": 38,
+					"sid": 209697780391088,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 936,
+						"y": 539,
+						"width": 1920,
+						"height": 1080,
+						"originX": 0.5,
+						"originY": 0.5,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "endTitleText",
+					"properties": {
+						"text": "ИТОГИ СМЕНЫ",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 64,
+						"line-height": 0,
+						"bold": false,
+						"italic": false,
+						"color": [
+							1,
+							0.85,
+							0.3,
+							1
+						],
+						"horizontal-alignment": "center",
+						"vertical-alignment": "top",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 39,
+					"sid": 324936458943680,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 486,
+						"y": 102,
+						"width": 900,
+						"height": 100,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "endArrivedText",
+					"properties": {
+						"text": "Курьеров дошло: 0",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 44,
+						"line-height": 0,
+						"bold": false,
+						"italic": false,
+						"color": [
+							0.9,
+							0.95,
+							0.9,
+							1
+						],
+						"horizontal-alignment": "center",
+						"vertical-alignment": "top",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 40,
+					"sid": 493806347734584,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 486,
+						"y": 272,
+						"width": 900,
+						"height": 70,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "endLostText",
+					"properties": {
+						"text": "Курьеров потеряно: 0",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 44,
+						"line-height": 0,
+						"bold": false,
+						"italic": false,
+						"color": [
+							0.9,
+							0.95,
+							0.9,
+							1
+						],
+						"horizontal-alignment": "center",
+						"vertical-alignment": "top",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 56,
+					"sid": 574076260452824,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 486,
+						"y": 367,
+						"width": 900,
+						"height": 70,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "endZonesText",
+					"properties": {
+						"text": "Зон потеряно: 0",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 44,
+						"line-height": 0,
+						"bold": false,
+						"italic": false,
+						"color": [
+							0.9,
+							0.95,
+							0.9,
+							1
+						],
+						"horizontal-alignment": "center",
+						"vertical-alignment": "top",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 57,
+					"sid": 202213987953738,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 486,
+						"y": 462,
+						"width": 900,
+						"height": 70,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "endEchoText",
+					"properties": {
+						"text": "Разговоров с Эхо: 0",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 44,
+						"line-height": 0,
+						"bold": false,
+						"italic": false,
+						"color": [
+							0.9,
+							0.95,
+							0.9,
+							1
+						],
+						"horizontal-alignment": "center",
+						"vertical-alignment": "top",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 58,
+					"sid": 148663403583549,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 486,
+						"y": 557,
+						"width": 900,
+						"height": 70,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "endEnergyText",
+					"properties": {
+						"text": "Энергии потрачено: 0",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 44,
+						"line-height": 0,
+						"bold": false,
+						"italic": false,
+						"color": [
+							0.9,
+							0.95,
+							0.9,
+							1
+						],
+						"horizontal-alignment": "center",
+						"vertical-alignment": "top",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 59,
+					"sid": 292266772695249,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 486,
+						"y": 652,
+						"width": 900,
+						"height": 70,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
+					}
+				},
+				{
+					"type": "endMenuButton",
+					"properties": {
+						"type": "button",
+						"text": "В стартовое меню",
+						"tooltip": "",
+						"initially-visible": false,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 60,
+					"sid": 431016877035229,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 746,
+						"y": 872,
+						"width": 380,
+						"height": 100,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
+					}
+				},
+				{
+					"type": "endTempButton",
+					"properties": {
+						"type": "button",
+						"text": "Конец (временно)",
+						"tooltip": "",
+						"initially-visible": true,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 66,
+					"sid": 437637407736203,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 2700,
+						"y": 61,
+						"width": 300,
+						"height": 60,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
 					}
 				}
 			],

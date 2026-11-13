@@ -1,0 +1,10 @@
+{
+	"name": "endEchoText",
+	"plugin-id": "Text",
+	"sid": 731362507778079,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": [],
+	"effectTypes": []
+}

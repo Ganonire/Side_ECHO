@@ -1,0 +1,10 @@
+{
+	"name": "endLostText",
+	"plugin-id": "Text",
+	"sid": 916227654642562,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": [],
+	"effectTypes": []
+}
