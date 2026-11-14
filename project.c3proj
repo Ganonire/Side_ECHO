@@ -131,7 +131,17 @@
 			"hintCloseButton",
 			"settingsButton",
 			"hintButton",
-			"endTempButton"
+			"endTempButton",
+			"menuNewGameButton",
+			"menuContinueButton",
+			"menuSettingsButton",
+			"menuLoreButton",
+			"settingsPickSaveFolderButton",
+			"settingsBackButton",
+			"menuTitleText",
+			"settingsTitleText",
+			"settingsInfoText",
+			"saveNoticeText"
 		],
 		"subfolders": []
 	},
@@ -144,13 +154,15 @@
 	},
 	"layouts": {
 		"items": [
+			"StartMenu",
 			"Layout 1"
 		],
 		"subfolders": []
 	},
 	"eventSheets": {
 		"items": [
-			"Event sheet 1"
+			"Event sheet 1",
+			"MenuEvents"
 		],
 		"subfolders": []
 	},

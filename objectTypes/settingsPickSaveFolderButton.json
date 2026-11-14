@@ -1,0 +1,9 @@
+{
+	"name": "settingsPickSaveFolderButton",
+	"plugin-id": "Button",
+	"sid": 131844467276350,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

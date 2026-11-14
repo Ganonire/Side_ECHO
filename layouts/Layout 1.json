@@ -391,41 +391,6 @@
 					}
 				},
 				{
-					"type": "energyButton",
-					"properties": {
-						"type": "button",
-						"text": "Energy -1",
-						"tooltip": "",
-						"initially-visible": true,
-						"enabled": true,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 6,
-					"sid": 603919756152506,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 437,
-						"y": 927,
-						"width": 318.5225518069405,
-						"height": 86.8408506023135,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				},
-				{
 					"type": "changeFrameButton",
 					"properties": {
 						"type": "button",
@@ -512,76 +477,6 @@
 						],
 						"z": 0,
 						"angle": 0
-					}
-				},
-				{
-					"type": "energyButton2",
-					"properties": {
-						"type": "button",
-						"text": "Energy -1",
-						"tooltip": "",
-						"initially-visible": true,
-						"enabled": true,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 10,
-					"sid": 363213806398973,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 773,
-						"y": 929,
-						"width": 318.5225518069405,
-						"height": 86.8408506023135,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				},
-				{
-					"type": "energyButton3",
-					"properties": {
-						"type": "button",
-						"text": "Energy -1",
-						"tooltip": "",
-						"initially-visible": true,
-						"enabled": true,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 11,
-					"sid": 601297075057329,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 1112.8551025390625,
-						"y": 928.161865234375,
-						"width": 318.5225518069405,
-						"height": 86.8408506023135,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
 					}
 				},
 				{
@@ -2026,6 +1921,111 @@
 							1
 						]
 					}
+				},
+				{
+					"type": "energyButton",
+					"properties": {
+						"type": "button",
+						"text": "Анализатор шума",
+						"tooltip": "",
+						"initially-visible": true,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 6,
+					"sid": 789369563025611,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 462.5,
+						"y": 911,
+						"width": 318.5225518069405,
+						"height": 86.8408506023135,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
+					}
+				},
+				{
+					"type": "energyButton2",
+					"properties": {
+						"type": "button",
+						"text": "Анализатор голоса",
+						"tooltip": "",
+						"initially-visible": true,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 10,
+					"sid": 198713143789003,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 798.5,
+						"y": 913,
+						"width": 318.5225518069405,
+						"height": 86.8408506023135,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
+					}
+				},
+				{
+					"type": "energyButton3",
+					"properties": {
+						"type": "button",
+						"text": "Определить погоду",
+						"tooltip": "",
+						"initially-visible": true,
+						"enabled": true,
+						"auto-font-size": true,
+						"checked": false,
+						"id": "",
+						"class": ""
+					},
+					"uid": 11,
+					"sid": 433135345266059,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 1138.5,
+						"y": 912,
+						"width": 318.5225518069405,
+						"height": 86.8408506023135,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						]
+					}
 				}
 			],
 			"sid": 587639621549370,
@@ -2624,6 +2624,56 @@
 							1,
 							1
 						]
+					}
+				},
+				{
+					"type": "saveNoticeText",
+					"properties": {
+						"text": "ИГРА СОХРАНЕНА",
+						"enable-bbcode": false,
+						"font": "Arial",
+						"size": 34,
+						"line-height": 0,
+						"bold": true,
+						"italic": false,
+						"color": [
+							0.36,
+							1,
+							0.55,
+							1
+						],
+						"horizontal-alignment": "right",
+						"vertical-alignment": "center",
+						"wrapping": "word",
+						"text-direction": "ltr",
+						"icon-set": -1,
+						"initially-visible": false,
+						"origin": "top-left",
+						"read-aloud": false
+					},
+					"uid": 278,
+					"sid": 716756165088797,
+					"tags": "",
+					"instanceVariables": {},
+					"behaviors": {},
+					"materialSurfaceType": "smooth",
+					"showing": true,
+					"locked": false,
+					"world": {
+						"x": 1415,
+						"y": 970,
+						"width": 430,
+						"height": 65,
+						"originX": 0,
+						"originY": 0,
+						"color": [
+							1,
+							1,
+							1,
+							1
+						],
+						"z": 0,
+						"angle": 0
 					}
 				}
 			],

@@ -1,0 +1,9 @@
+{
+	"name": "menuNewGameButton",
+	"plugin-id": "Button",
+	"sid": 309229953597247,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

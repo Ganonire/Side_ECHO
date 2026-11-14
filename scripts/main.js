@@ -1,31 +1,463 @@
 // ================================================================
-// SIDE ECHO — main.js
-// Логика UI, магазина, списка и вкладок. 
-// Переходы, звук и глобальные состояния (isTransitioning, shopOpen) 
-// управляются через Event Sheet Construct 3.
-// Плюс: кнопки «Настройки»/«Подсказка», окно подсказки и конечный экран.
+// SIDE ECHO — main.js (сохранения в My Games)
+// Главное меню, контрольные сохранения и игровой UI (оптимизированная версия).
+// Автосохранение строго после успешной покупки или появления нового звонка.
+// Кнопка «Настройки» в игре тоже сохраняет и уходит в главное меню.
+// Обычные действия игрока (приборы, перемещения, списки) НЕ сохраняются.
+// Переход между комнатами и звук также управляются Event Sheet Construct 3.
+// Меню настроек — заглушка только в StartMenu, на отдельном слое Options.
 // ================================================================
 
 runOnStartup(runtime => {
-    runtime.addEventListener("beforeprojectstart", async () => {
-        if (window.__energyInitDone) return;
-        window.__energyInitDone = true;
+    const LEGACY_SAVE_KEY = "side-echo-checkpoint-v1";
+    const SAVE_KEY = "side-echo-checkpoint-json-v2";
+    const SAVE_FILENAME = "savegame.json";
+    // В Windows WebView2 <documents> указывает на системную папку «Документы».
+    const SAVE_FOLDER = "My Games/Side ECHO";
+    const SAVE_PATH = `${SAVE_FOLDER}/${SAVE_FILENAME}`;
+    const DOCUMENTS_TAG = "<documents>";
+    const HANDLE_DB = "side-echo-documents-permission-v2";
+    const HANDLE_STORE = "directories";
+    const HANDLE_ID = "documents-root";
+    const CHECK_NAMES = ["listItem1", "listItem2", "listItem3"];
+    const SETTINGS_TYPES = ["endPanel", "settingsTitleText", "settingsInfoText", "settingsBackButton", "settingsPickSaveFolderButton"];
+    const GAME_LAYOUT = "Layout 1";
+    const MENU_LAYOUT = "StartMenu";
+    const VAR_NAMES = ["Energy", "roomSelect", "Credits", "CatFood", "CouriersArrived",
+                       "CouriersLost", "ZonesLost", "EchoTalks", "EnergySpent"];
+    let queuedStorage = Promise.resolve();
+    let loadForNextGame = null;
+    let cleanup = () => {};
+    let configPromise = null;
+    let projectRootHandle = null;
+    let saveFolderProblem = "";
+
+    // Static placeholder panel. No audio/display/fullscreen APIs or settings storage.
+    function createSettingsController({beforeOpen = () => true, afterClose = () => {}} = {}) {
+        const layer = runtime.layout.getLayer("Options");
+        const parts = SETTINGS_TYPES.flatMap(name =>
+            (runtime.objects[name]?.getAllInstances() ?? []).filter(o => o.layer === layer));
+        const back = runtime.objects.settingsBackButton?.getFirstInstance();
+        let opened = false;
+        parts.forEach(o => { o.isVisible = false; });
+        function open() {
+            if (opened || beforeOpen() === false) return;
+            opened = true;
+            parts.forEach(o => { o.isVisible = true; });
+        }
+        function close() {
+            if (!opened) return;
+            opened = false;
+            parts.forEach(o => { o.isVisible = false; });
+            afterClose();
+        }
+        back?.addEventListener("click", close);
+        return {open, close};
+    }
+
+    // The packaged JSON is unchanged across room changes and menu returns.
+    function loadGameConfig() {
+        if (!configPromise) {
+            configPromise = runtime.assets.getProjectFileUrl("tik.json")
+                .then(url => fetch(url)).then(response => response.json())
+                .catch(e => {
+                    console.warn("Файл tik.json не загружен, используются значения по умолчанию", e);
+                    return {settings: {room1X: 935, room2X: 2905, fadeDuration: 0.3}};
+                });
+        }
+        return configPromise;
+    }
+
+    // Последовательность операций защищает от гонки при двух быстрых покупках.
+    function storageOperation(action) {
+        queuedStorage = queuedStorage.catch(() => {}).then(action);
+        return queuedStorage;
+    }
+
+    // Два режима запуска:
+    // 1. Экспорт Windows WebView2: встроенный объект FileSystem имеет доступ
+    //    к <documents> БЕЗ диалогов — настоящий Документы/My Games/Side ECHO.
+    // 2. Preview Construct 3 (в том числе установленный PWA): браузерный sandbox.
+    //    Один раз выбрать «Документы» вручную, далее используется remembered handle.
+    // Ни при каком режиме НЕ подменять отсутствие файла старой копией Local Storage.
+    const fsPlugin = runtime.objects.FileSystem;
+    function hasDesktopDocuments() {
+        return !!fsPlugin?.desktopFeaturesSupported &&
+            typeof fsPlugin.hasPickerTag === "function" &&
+            fsPlugin.hasPickerTag(DOCUMENTS_TAG);
+    }
+
+    function supportsPreviewDocuments() {
+        return !runtime.isInWorker && typeof window !== "undefined" &&
+            typeof window.showDirectoryPicker === "function" &&
+            typeof indexedDB !== "undefined";
+    }
+
+    function openHandleDatabase() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(HANDLE_DB, 1);
+            request.onupgradeneeded = () => request.result.createObjectStore(HANDLE_STORE);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function getRememberedDocuments() {
+        if (!supportsPreviewDocuments()) return null;
+        const db = await openHandleDatabase();
+        try {
+            return await new Promise((resolve, reject) => {
+                const request = db.transaction(HANDLE_STORE, "readonly")
+                    .objectStore(HANDLE_STORE).get(HANDLE_ID);
+                request.onsuccess = () => resolve(request.result ?? null);
+                request.onerror = () => reject(request.error);
+            });
+        } finally { db.close(); }
+    }
+
+    async function rememberDocuments(handle) {
+        const db = await openHandleDatabase();
+        try {
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(HANDLE_STORE, "readwrite");
+                tx.objectStore(HANDLE_STORE).put(handle, HANDLE_ID);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+                tx.onabort = () => reject(tx.error);
+            });
+        } finally { db.close(); }
+    }
+
+    async function hasDocumentsPermission(mode = "read") {
+        if (hasDesktopDocuments()) return true;
+        if (!projectRootHandle) return false;
+        try {
+            if (typeof projectRootHandle.queryPermission !== "function") return true;
+            return (await projectRootHandle.queryPermission({mode})) === "granted";
+        } catch (e) { console.warn("Доступ к Документам не проверен", e); return false; }
+    }
+
+    // В Preview requestPermission/showDirectoryPicker нужно вызвать СРАЗУ
+    // из клика (до await), иначе браузер потеряет user activation.
+    function requestDocumentsFromClick({forcePicker = false} = {}) {
+        if (hasDesktopDocuments()) return Promise.resolve(true);
+        if (!supportsPreviewDocuments()) {
+            return Promise.reject(new Error("Нет доступа к папке Документы в текущем режиме запуска"));
+        }
+        let requested;
+        try {
+            if (!forcePicker && projectRootHandle &&
+                typeof projectRootHandle.requestPermission === "function") {
+                requested = projectRootHandle.requestPermission({mode: "readwrite"})
+                    .then(state => {
+                        if (state !== "granted") throw new Error("Доступ к Документам не разрешён");
+                        return projectRootHandle;
+                    });
+            } else if (!forcePicker && projectRootHandle) {
+                requested = Promise.resolve(projectRootHandle);
+            } else {
+                requested = window.showDirectoryPicker({
+                    id: "side-echo-documents", startIn: "documents", mode: "readwrite"
+                });
+            }
+        } catch (e) { return Promise.reject(e); }
+        return requested.then(async handle => {
+            projectRootHandle = handle;
+            try { await rememberDocuments(handle); }
+            catch (e) { console.warn("Папка Документы не запомнена между запусками", e); }
+            saveFolderProblem = "";
+            return handle;
+        });
+    }
+
+    // Preview: размещаем файл внутри выбранных «Документов».
+    async function getPreviewSaveHandle(create = false) {
+        if (!projectRootHandle) return null;
+        if (!await hasDocumentsPermission(create ? "readwrite" : "read")) {
+            throw new Error("Разреши доступ к папке Документы через Настройки");
+        }
+        let folder = projectRootHandle;
+        for (const component of ["My Games", "Side ECHO"]) {
+            try { folder = await folder.getDirectoryHandle(component, {create}); }
+            catch (e) {
+                if (!create && e?.name === "NotFoundError") return null;
+                throw e;
+            }
+        }
+        try { return await folder.getFileHandle(SAVE_FILENAME, {create}); }
+        catch (e) { if (!create && e?.name === "NotFoundError") return null; throw e; }
+    }
+
+    function parseSave(raw) {
+        if (!raw) return null;
+        try {
+            const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return (data?.version === 1 || data?.version === 2) &&
+                   data?.variables && typeof data.variables.Energy === "number" &&
+                   typeof data.variables.Credits === "number" ? data : null;
+        } catch (e) {
+            console.warn("Некорректный JSON сохранения SIDE ECHO", e);
+            return null;
+        }
+    }
+
+    function isMissingFileError(e) {
+        return e?.name === "NotFoundError" || e?.code === "ENOENT" ||
+            /not found|no such file|не найден/i.test(e?.message || "");
+    }
+
+    // Строго читаем savegame.json с диска; удалённый/повреждённый файл
+    // НЕ заменяется копией runtime.storage — кнопка Продолжить отключена.
+    async function readCheckpoint() {
+        try {
+            let content;
+            if (hasDesktopDocuments()) {
+                content = await fsPlugin.readFile({
+                    pickerTag: DOCUMENTS_TAG, folderPath: SAVE_PATH, mode: "text"
+                });
+            } else {
+                const handle = await getPreviewSaveHandle(false);
+                if (!handle) return null;
+                content = await (await handle.getFile()).text();
+            }
+            const parsed = parseSave(content);
+            if (!parsed) throw new Error("Файл сохранения повреждён или имеет неверный формат");
+            saveFolderProblem = "";
+            return parsed;
+        } catch (e) {
+            if (!isMissingFileError(e)) {
+                saveFolderProblem = e.message || String(e);
+                console.warn("Не удалось прочитать My Games/Side ECHO/savegame.json", e);
+            } else saveFolderProblem = "";
+            return null;
+        }
+    }
+
+    // В некоторых desktop-обёртках повторный вызов createFolder() на уже
+    // существующей папке возвращает EEXIST. На второй покупке такой сбой
+    // прерывал запись ДО writeFile(). Перезаписываем файл напрямую; папку
+    // создаём только тогда, когда путь ещё не существует.
+    function isExistingFolderError(e) {
+        return e?.code === "EEXIST" || e?.name === "AlreadyExistsError" ||
+            e?.name === "InvalidModificationError" ||
+            /already exists|file exists|уже существует/i.test(e?.message || "");
+    }
+
+    async function writeCheckpoint(data) {
+        const contents = JSON.stringify(data, null, 2) + "\n";
+        if (hasDesktopDocuments()) {
+            const write = () => fsPlugin.writeFile({
+                pickerTag: DOCUMENTS_TAG,
+                folderPath: SAVE_PATH,
+                mode: "overwrite", // заменить всё содержимое, НЕ append
+                data: contents
+            });
+            try {
+                await write(); // обычный случай: файл и папка уже существуют
+            } catch (e) {
+                if (!isMissingFileError(e)) throw e;
+                // Первая покупка: создаём недостающую папку и пробуем снова.
+                try { await fsPlugin.createFolder(DOCUMENTS_TAG, SAVE_FOLDER); }
+                catch (folderError) {
+                    if (!isExistingFolderError(folderError)) throw folderError;
+                }
+                await write();
+            }
+        } else {
+            const handle = await getPreviewSaveHandle(true);
+            if (!handle) throw new Error("Разреши доступ к папке Документы через Настройки");
+            // createWritable() без keepExistingData перезаписывает файл,
+            // независимо от того, существовал он до этой покупки или нет.
+            const writer = await handle.createWritable({keepExistingData: false});
+            try { await writer.write(contents); await writer.close(); }
+            catch (e) { try { await writer.abort(); } catch (_) {} throw e; }
+        }
+
+        // Не считаем сохранение успешным только по отсутствию ошибки записи:
+        // повторно читаем именно диск, чтобы исключить "успешно", но старый JSON.
+        const savedOnDisk = await readCheckpoint();
+        if (!savedOnDisk || JSON.stringify(savedOnDisk) !== JSON.stringify(data)) {
+            throw new Error("После записи файл savegame.json не содержит новые данные");
+        }
+        // Резерв только для ручного восстановления — не включает «Продолжить».
+        try { await runtime.storage.setItem(SAVE_KEY, contents); }
+        catch (e) { console.warn("Резервная копия недоступна (JSON сохранён)", e); }
+    }
+
+    async function deleteCheckpoint() {
+        if (hasDesktopDocuments()) {
+            try { await fsPlugin.delete(DOCUMENTS_TAG, SAVE_PATH, false); }
+            catch (e) { if (!isMissingFileError(e)) throw e; }
+        } else {
+            const handle = await getPreviewSaveHandle(false);
+            if (handle) {
+                // Разрешение на запись проверяем перед удалением существующего файла.
+                if (!await hasDocumentsPermission("readwrite")) {
+                    throw new Error("Нет разрешения на удаление старого сохранения");
+                }
+                const folder = await projectRootHandle.getDirectoryHandle("My Games");
+                const gameFolder = await folder.getDirectoryHandle("Side ECHO");
+                try { await gameFolder.removeEntry(SAVE_FILENAME); }
+                catch (e) { if (!isMissingFileError(e)) throw e; }
+            }
+        }
+        await runtime.storage.removeItem(SAVE_KEY);
+        await runtime.storage.removeItem(LEGACY_SAVE_KEY);
+    }
+
+    async function initStartMenu() {
+        const get = name => runtime.objects[name]?.getFirstInstance() ?? null;
+        const newButton = get("menuNewGameButton");
+        const continueButton = get("menuContinueButton");
+        const settingsButton = get("menuSettingsButton");
+        const loreButton = get("menuLoreButton");
+        const folderButton = get("settingsPickSaveFolderButton");
+        const infoText = get("settingsInfoText");
+        let checkpoint = null;
+        let opening = false;
+        loreButton.isEnabled = false;
+        continueButton.isEnabled = false;
+        settingsButton.isEnabled = true;
+        const menuButtons = [newButton, continueButton, settingsButton, loreButton, get("menuTitleText")].filter(Boolean);
+        const settingsUI = createSettingsController({
+            beforeOpen: () => { menuButtons.forEach(o => o.isVisible = false); return true; },
+            afterClose: () => { menuButtons.forEach(o => o.isVisible = true); }
+        });
+
+        async function updateFolderInfo() {
+            if (!infoText) return;
+            if (hasDesktopDocuments()) {
+                infoText.text = "СОХРАНЕНИЯ:\nДокументы\\My Games\\Side ECHO\\savegame.json\nПапка создаётся автоматически после покупки.";
+                if (folderButton) { folderButton.isEnabled = false; folderButton.isVisible = false; }
+            } else if (!supportsPreviewDocuments()) {
+                infoText.text = "Недоступна запись в Документы.\nДля автоматических сохранений нужна Windows-версия игры.";
+                if (folderButton) folderButton.isEnabled = false;
+            } else if (await hasDocumentsPermission()) {
+                infoText.text = "ПАПКА ДОКУМЕНТЫ ПОДКЛЮЧЕНА\nMy Games\\Side ECHO\\savegame.json\nПуть запомнен для следующих запусков.";
+                if (folderButton) folderButton.isEnabled = true;
+            } else if (projectRootHandle) {
+                infoText.text = "В Preview требуется повторно разрешить доступ к Документам.\nПуть выбирать заново не нужно.";
+                if (folderButton) folderButton.isEnabled = true;
+            } else {
+                infoText.text = "В Preview один раз выбери папку «Документы».\nВ ней игра создаст My Games\\Side ECHO\\savegame.json.";
+                if (folderButton) folderButton.isEnabled = true;
+            }
+            if (saveFolderProblem) infoText.text += `\n${saveFolderProblem}`;
+        }
+        async function refreshCheckpoint() {
+            try { checkpoint = await readCheckpoint(); }
+            catch (e) { console.warn("Не удалось прочитать сохранение", e); checkpoint = null; }
+            continueButton.isEnabled = !!checkpoint;
+            await updateFolderInfo();
+        }
+
+        await queuedStorage.catch(() => {});
+        if (!hasDesktopDocuments()) {
+            try { projectRootHandle = await getRememberedDocuments(); }
+            catch (e) { console.warn("Не удалось восстановить доступ к Документам", e); }
+        }
+        await refreshCheckpoint();
+        settingsButton?.addEventListener("click", () => {
+            settingsUI.open();
+            if (hasDesktopDocuments() && folderButton) folderButton.isVisible = false;
+            void updateFolderInfo();
+        });
+        folderButton?.addEventListener("click", () => {
+            if (hasDesktopDocuments()) return;
+            // Запрашиваем доступ из прямого действия пользователя.
+            const request = requestDocumentsFromClick({forcePicker: !projectRootHandle});
+            void request.then(async () => {
+                saveFolderProblem = "";
+                await refreshCheckpoint();
+            }).catch(async e => {
+                if (e?.name !== "AbortError") saveFolderProblem = e.message || String(e);
+                await updateFolderInfo();
+            });
+        });
+        const menuEscape = e => { if (e.key === "Escape") settingsUI.close(); };
+        runtime.addEventListener("keydown", menuEscape);
+        cleanup = () => runtime.removeEventListener("keydown", menuEscape);
+
+        newButton?.addEventListener("click", () => {
+            if (opening) return;
+            opening = true;
+            newButton.isEnabled = false;
+            continueButton.isEnabled = false;
+            // Получаем разрешение непосредственно из клика на кнопку.
+            const request = requestDocumentsFromClick();
+            void request.then(() => storageOperation(deleteCheckpoint))
+                .then(() => {
+                    loadForNextGame = null;
+                    runtime.goToLayout(GAME_LAYOUT);
+                })
+                .catch(async e => {
+                    console.warn("Новая игра: папка Документы недоступна", e);
+                    saveFolderProblem = e?.name === "AbortError" ? "Выбор папки отменён" : (e.message || String(e));
+                    opening = false;
+                    newButton.isEnabled = true;
+                    await refreshCheckpoint();
+                    settingsUI.open();
+                });
+        });
+
+        continueButton?.addEventListener("click", () => {
+            if (opening || !continueButton.isEnabled) return;
+            opening = true;
+            newButton.isEnabled = false;
+            continueButton.isEnabled = false;
+            void storageOperation(readCheckpoint).then(saved => {
+                if (!saved) throw new Error("Файл сохранения отсутствует или повреждён");
+                loadForNextGame = saved;
+                runtime.goToLayout(GAME_LAYOUT);
+            }).catch(async e => {
+                saveFolderProblem = e?.message || String(e);
+                opening = false;
+                newButton.isEnabled = true;
+                await refreshCheckpoint();
+            });
+        });
+    }
+
+    runtime.addEventListener("beforeanylayoutend", () => {
+        cleanup();
+        cleanup = () => {};
+    });
+
+    // Инициализация должна происходить КАЖДЫЙ раз при входе в игровой макет,
+    // а не один раз на startup: иначе после возврата из меню кнопки не работают.
+    runtime.addEventListener("beforeanylayoutstart", async ({layout}) => {
+        if (layout.name !== MENU_LAYOUT && layout.name !== GAME_LAYOUT) return;
+        if (layout.name === MENU_LAYOUT) {
+            await initStartMenu();
+            return;
+        }
+        const restoredSave = loadForNextGame;
+        loadForNextGame = null;
+        const runtimeListeners = [];
+        const onRuntime = (name, cb) => {
+            runtime.addEventListener(name, cb);
+            runtimeListeners.push([name, cb]);
+        };
 
         const getOne = (name) => runtime.objects[name]?.getFirstInstance() ?? null;
         const getAll = (name) => runtime.objects[name]?.getAllInstances() ?? [];
 
-        // --- Загрузка JSON (Файл tik.json) ---
-        let config = {
-            settings: { room1X: 935, room2X: 2905, fadeDuration: 0.3 }
-        };
-        try {
-            const response = await fetch(await runtime.assets.getProjectFileUrl("tik.json"));
-            config = await response.json();
-        } catch (e) { 
-            console.warn("Файл tik.json не загружен, используются значения по умолчанию", e); 
-        }
+        const config = await loadGameConfig();
 
         const varManager = runtime.objects.varManager.getFirstInstance();
+        // Проверка сохранения на входе в новый макет, до первого отображения HUD.
+        if (restoredSave) {
+            for (const name of VAR_NAMES) {
+                if (Object.hasOwn(restoredSave.variables, name)) {
+                    varManager.instVars[name] = restoredSave.variables[name];
+                }
+            }
+        }
+        runtime.globalVars.isTransitioning = 0;
+        runtime.globalVars.shopOpen = 0;
+        runtime.globalVars.roomSelect = restoredSave?.roomSelect === 1 ? 1 : 0;
+        // Не сбрасываем musicStarted: фоновый трек не должен запускаться второй раз.
+
         const energyText = getOne("energyText");
         const energyBar = getOne("energyBar");
         const energyBarBG = getOne("energyBarBg");
@@ -41,10 +473,14 @@ runOnStartup(runtime => {
         const dialogTabRadio = getOne("dialogTabRadio");
         const dialogTabDevices = getOne("dialogTabDevices");
         const cameraObj = getOne("cameraObj");
+        if (cameraObj) cameraObj.x = runtime.globalVars.roomSelect === 1 ? 2905 : 935;
 
         // HUD-кнопки, окно подсказки и конечный экран.
-        const settingsButton = getOne("settingsButton");
         const hintButton = getOne("hintButton");
+        const settingsButton = getOne("settingsButton");
+        const saveNoticeText = getOne("saveNoticeText");
+        if (saveNoticeText) saveNoticeText.isVisible = false;
+        let saveNoticeExpires = 0;
         const hintCloseButton = getOne("hintCloseButton");
         const endMenuButton = getOne("endMenuButton");
         const endTempButton = getOne("endTempButton");
@@ -70,9 +506,9 @@ runOnStartup(runtime => {
         // ------------------------------------------------------------
         function updateEnergyUI() {
             const energy = varManager.instVars.Energy;
-            if (energyText && energyText.text !== String(energy)) energyText.text = String(energy);
             if (energy === lastDisplayedEnergy) return;
             lastDisplayedEnergy = energy;
+            if (energyText) energyText.text = String(energy);
 
             const ratio = Math.max(0, Math.min(1, energy / MAX_ENERGY));
             if (energySegments.length > 0) {
@@ -112,8 +548,9 @@ runOnStartup(runtime => {
         // ДИАЛОГОВОЕ ОКНО
         // ------------------------------------------------------------
         const RADIO_TEXT = "Звонок Nº 1";
-        let dialogTab = "radio";
-        let currentDevice = null;
+        let dialogTab = restoredSave?.dialog?.tab === "devices" ? "devices" : "radio";
+        let currentDevice = Number.isInteger(restoredSave?.dialog?.device)
+            ? restoredSave.dialog.device : null;
 
         function renderDialog() {
             if (dialogTabRadio) dialogTabRadio.animationFrame = dialogTab === "radio" ? 1 : 0;
@@ -123,7 +560,6 @@ runOnStartup(runtime => {
             if (dialogTab === "radio") dialogText.text = RADIO_TEXT;
             else dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
         }
-        function showRadio() { dialogTab = "radio"; renderDialog(); }
         function showDeviceTab() { dialogTab = "devices"; renderDialog(); }
         function showDevice(index) { currentDevice = index; showDeviceTab(); }
 
@@ -142,7 +578,7 @@ runOnStartup(runtime => {
         const shopParts = SHOP_PART_NAMES.flatMap(getAll);
         const coveredButtons = [...energyButtons, getOne("changeFrameButton")].filter(Boolean);
 
-        let coffeeInStock = false;
+        let coffeeInStock = restoredSave?.coffeeInStock === true;
         let messageTimer = null;
 
         function showShopMessage(text) {
@@ -180,9 +616,7 @@ runOnStartup(runtime => {
         // ------------------------------------------------------------
         // HUD-КНОПКИ, ПОДСКАЗКА И КОНЕЧНЫЙ ЭКРАН
         // ------------------------------------------------------------
-        // Макет стартового меню. Пока его нет — кнопки просто пишут
-        // предупреждение в консоль. Имя меняется в tik.json (ui.startMenuLayout).
-        const START_MENU_LAYOUT = config.ui?.startMenuLayout ?? "StartMenu";
+        // Макет реального стартового меню. Возврат не создает сохранение.
         const endText = {
             title: config.end?.title ?? "ИТОГИ СМЕНЫ",
             arrived: config.end?.arrived ?? "Курьеров дошло",
@@ -212,12 +646,12 @@ runOnStartup(runtime => {
         // cameraObj.x. Раскладка рисовалась вокруг центра (935, 540).
         const DESIGN_CX = 935;
         const DESIGN_CY = 540;
-        const hudButtons = [settingsButton, hintButton].filter(Boolean);
+        const hudButtons = [hintButton, settingsButton, saveNoticeText].filter(Boolean);
         const followParts = [...hudButtons, ...hintParts, ...endParts];
         const followOffsets = new Map(
             followParts.map(o => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }])
         );
-        const fullscreenPanels = [...getAll("hintPanel"), ...getAll("endPanel")];
+        const fullscreenPanels = new Set([...getAll("hintPanel"), ...getAll("endPanel")]);
 
         // Видимая область слоя в координатах слоя: центр и размер.
         function viewRect(layer) {
@@ -237,24 +671,12 @@ runOnStartup(runtime => {
             }
         }
 
-        function placeInView(obj) {
-            const view = viewRect(obj.layer);
-            const off = followOffsets.get(obj);
-            obj.x = view.cx + off.dx;
-            obj.y = view.cy + off.dy;
-            // Полноэкранные панели растягиваем на всю видимую область.
-            if (fullscreenPanels.includes(obj)) {
-                obj.width = view.w + 4;
-                obj.height = view.h + 4;
-            }
-        }
-
         // HTML-кнопки рисуются поверх всего, поэтому пока открыт полноэкранный
         // экран, прячем их и потом возвращаем в прежнее состояние.
         const gameDomButtons = [
             ...energyButtons, getOne("changeFrameButton"), coffeeButton, shopButton,
             shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton,
-            settingsButton, hintButton, endTempButton
+            hintButton, settingsButton, endTempButton
         ].filter(Boolean);
         const savedDomVisibility = new Map();
         let overlay = null; // null | "hint" | "end"
@@ -263,7 +685,19 @@ runOnStartup(runtime => {
             if (overlay || runtime.globalVars.isTransitioning === 1) return false;
             overlay = kind;
             gameDomButtons.forEach(b => { savedDomVisibility.set(b, b.isVisible); b.isVisible = false; });
-            parts.forEach(p => { placeInView(p); p.isVisible = true; });
+            const cachedViews = new Map();
+            parts.forEach(p => {
+                let view = cachedViews.get(p.layer);
+                if (!view) { view = viewRect(p.layer); cachedViews.set(p.layer, view); }
+                const off = followOffsets.get(p);
+                p.x = view.cx + off.dx;
+                p.y = view.cy + off.dy;
+                if (fullscreenPanels.has(p)) {
+                    p.width = view.w + 4;
+                    p.height = view.h + 4;
+                }
+                p.isVisible = true;
+            });
             return true;
         }
 
@@ -279,14 +713,7 @@ runOnStartup(runtime => {
         const playClick = () => { try { runtime.callFunction("PlayClick"); } catch (e) { /* функции нет — без звука */ } };
 
         function goToStartMenu() {
-            let exists = false;
-            try { exists = !!runtime.getLayout(START_MENU_LAYOUT); } catch (e) { exists = false; }
-            if (!exists) {
-                console.warn(`Стартовое меню (макет "${START_MENU_LAYOUT}") ещё не создано.`);
-                return false;
-            }
-            runtime.goToLayout(START_MENU_LAYOUT);
-            return true;
+            runtime.goToLayout(MENU_LAYOUT);
         }
 
         const openHint = () => openOverlay("hint", hintParts);
@@ -305,17 +732,30 @@ runOnStartup(runtime => {
         hintParts.forEach(p => { p.isVisible = false; });
         endParts.forEach(p => { p.isVisible = false; });
 
-        if (settingsButton) settingsButton.addEventListener("click", () => {
-            if (overlay || runtime.globalVars.isTransitioning === 1) return;
-            playClick();
-            goToStartMenu();
-        });
         if (hintButton) hintButton.addEventListener("click", () => {
             if (overlay || runtime.globalVars.isTransitioning === 1) return;
             playClick();
             openHint();
         });
         if (hintCloseButton) hintCloseButton.addEventListener("click", () => { playClick(); closeHint(); });
+
+        // «Настройки»: сначала сохраняем игру, и только после успешной записи
+        // уходим в главное меню. Если сохранить не удалось, остаёмся в игре
+        // и показываем «ОШИБКА СОХРАНЕНИЯ», чтобы прогресс не потерялся молча.
+        let leavingToMenu = false;
+        if (settingsButton) settingsButton.addEventListener("click", async () => {
+            if (leavingToMenu || overlay || runtime.globalVars.isTransitioning === 1) return;
+            leavingToMenu = true;
+            settingsButton.isEnabled = false;
+            playClick();
+            const saved = await saveCheckpoint("settings");
+            if (saved) {
+                goToStartMenu();
+            } else {
+                leavingToMenu = false;
+                settingsButton.isEnabled = true;
+            }
+        });
 
         // Временный выход на конечный экран — во второй комнате.
         if (endTempButton) endTempButton.addEventListener("click", () => {
@@ -325,16 +765,45 @@ runOnStartup(runtime => {
         });
         if (endMenuButton) endMenuButton.addEventListener("click", () => {
             playClick();
-            // Пока стартового меню нет — просто возвращаемся в игру.
-            if (!goToStartMenu()) closeEndScreen();
+            goToStartMenu();
         });
 
         // ------------------------------------------------------------
         // TICK (Обновление UI)
         // ------------------------------------------------------------
-        runtime.addEventListener("tick2", () => {
-            // HUD-кнопки следуют за камерой (правый верхний угол в любой комнате).
-            hudButtons.forEach(placeInView);
+        let lastHudX = NaN;
+        let lastHudY = NaN;
+        // Подсказка открывается при старте игры (новая игра).
+        // Ждём пару кадров, чтобы камера и видимая область уже встали на место.
+        const SHOW_HINT_ON_NEW_GAME = true;
+        const SHOW_HINT_ON_CONTINUE = false;
+        let startHintTicks = (restoredSave ? SHOW_HINT_ON_CONTINUE : SHOW_HINT_ON_NEW_GAME) ? 2 : 0;
+        onRuntime("tick2", () => {
+            if (startHintTicks > 0 && --startHintTicks === 0) {
+                // Если переход ещё идёт, попробуем на следующем кадре.
+                if (!overlay && (runtime.globalVars.isTransitioning === 1 || !openHint())) startHintTicks = 1;
+            }
+            if (saveNoticeText?.isVisible) {
+                const remaining = saveNoticeExpires - Date.now();
+                if (remaining <= 0) saveNoticeText.isVisible = false;
+                else saveNoticeText.opacity = Math.min(1, remaining / 550);
+            }
+            // One viewport query per frame instead of one per HUD button, and
+            // no position writes when the camera has not moved.
+            if (hudButtons.length) {
+                const view = viewRect(hudButtons[0].layer);
+                if (view.cx !== lastHudX || view.cy !== lastHudY) {
+                    lastHudX = view.cx;
+                    lastHudY = view.cy;
+                    for (const button of hudButtons) {
+                        const offset = followOffsets.get(button);
+                        button.x = view.cx + offset.dx;
+                        button.y = view.cy + offset.dy;
+                    }
+                }
+            }
+            // Движок/события не должны сбрасывать крестики после загрузки.
+            if (listPanel?.isVisible) renderListChecks();
             if (varManager.instVars.Energy !== lastDisplayedEnergy) updateEnergyUI();
             if (varManager.instVars.Credits !== lastDisplayedCredits) updateCreditsUI();
         });
@@ -363,6 +832,7 @@ runOnStartup(runtime => {
             varManager.instVars.Credits -= COFFEE_PRICE;
             coffeeInStock = true;
             updateCreditsUI(); showShopMessage("Кофе куплен"); refreshShopTexts();
+            void saveCheckpoint("purchase");
         });
 
         // Покупка корма
@@ -374,10 +844,11 @@ runOnStartup(runtime => {
             varManager.instVars.Credits -= CATFOOD_PRICE;
             varManager.instVars.CatFood += 1;
             updateCreditsUI(); showShopMessage("Корм куплен"); refreshShopTexts();
+            void saveCheckpoint("purchase");
         });
 
         // Закрытие магазина на Esc
-        runtime.addEventListener("keydown", (e) => { 
+        onRuntime("keydown", (e) => { 
             if (e.key !== "Escape") return;
             if (overlay === "hint") { closeHint(); return; }
             if (overlay) return;
@@ -388,7 +859,7 @@ runOnStartup(runtime => {
 
         // Кнопка выпить кофе
         if (coffeeButton) {
-            coffeeButton.isVisible = false;
+            coffeeButton.isVisible = coffeeInStock;
             coffeeButton.addEventListener("click", () => {
                 if (runtime.globalVars.isTransitioning === 1) return;
                 if (runtime.globalVars.shopOpen === 1 || !coffeeInStock) return;
@@ -432,7 +903,89 @@ runOnStartup(runtime => {
 
         if (listPanel) listPanel.isVisible = false;
         if (listCloseButton) listCloseButton.isVisible = false;
+        // Пункты чек-листа не являются циклическими анимациями.
+        // Останавливаем их, иначе движок сам дойдёт до кадра с крестиком.
+        const listChecks = listItems.map((item, i) => {
+            const legacy = restoredSave?.listChecks?.[i];
+            const current = restoredSave?.checklist?.[CHECK_NAMES[i]];
+            return current?.checked === true || current?.checked === 1 ||
+                (current == null && (legacy === 1 || legacy === true));
+        });
+        function renderListChecks() {
+            listItems.forEach((item, i) => {
+                // 0 — пустой бокс, 1 — бокс с крестиком.
+                // Отключаем автоматическую смену кадров также на уровне спрайта.
+                item.animationSpeed = 0;
+                item.stopAnimation();
+                const target = listChecks[i] ? 1 : 0;
+                if (item.animationFrame !== target) item.animationFrame = target;
+            });
+        }
+        renderListChecks();
         listItems.forEach(item => { item.isVisible = false; });
+
+        // Счётчик отличает даже две быстрые покупки с одинаковым savedAt.
+        // Старые сохранения без revision остаются совместимыми.
+        let saveRevision = Number.isSafeInteger(restoredSave?.revision) && restoredSave.revision >= 0
+            ? restoredSave.revision : 0;
+
+        // Snapshot копируется непосредственно в момент контрольной точки, а не
+        // после завершения асинхронной записи (иначе могли бы попасть новые действия).
+        function makeCheckpoint() {
+            const variables = {};
+            for (const name of VAR_NAMES) variables[name] = varManager.instVars[name];
+            return {
+                version: 2,
+                revision: ++saveRevision,
+                savedAt: new Date().toISOString(),
+                variables,
+                roomSelect: runtime.globalVars.roomSelect === 1 ? 1 : 0,
+                coffeeInStock,
+                dialog: { tab: dialogTab, device: currentDevice },
+                checklist: Object.fromEntries(CHECK_NAMES.map((name, i) => [name, {
+                    checked: !!listChecks[i], animationFrame: listChecks[i] ? 1 : 0
+                }])),
+                listChecks: listChecks.map(checked => checked ? 1 : 0)
+            };
+        }
+
+        function showSaveNotice(text, isError = false) {
+            if (!saveNoticeText || runtime.layout.name !== GAME_LAYOUT) return;
+            saveNoticeText.text = text;
+            saveNoticeText.colorRgb = isError ? [1, 0.38, 0.36] : [0.36, 1, 0.55];
+            saveNoticeText.opacity = 1;
+            saveNoticeText.isVisible = true;
+            saveNoticeExpires = Date.now() + 2500;
+            // Корректная позиция даже если покупка сделана сразу после смены комнаты.
+            const view = viewRect(saveNoticeText.layer);
+            const off = followOffsets.get(saveNoticeText);
+            if (off) { saveNoticeText.x = view.cx + off.dx; saveNoticeText.y = view.cy + off.dy; }
+        }
+
+        // Возвращает Promise<boolean>: true — файл записан и проверен на диске.
+        function saveCheckpoint(reason) {
+            if (reason !== "purchase" && reason !== "new-call" && reason !== "settings") {
+                return Promise.resolve(false);
+            }
+            // Снимок на момент покупки, ДО асинхронной записи. Последующие
+            // клики/расход энергии не включаются в уже созданный checkpoint.
+            const snapshot = makeCheckpoint();
+            return storageOperation(() => writeCheckpoint(snapshot))
+                .then(() => {
+                    if (reason === "purchase") showSaveNotice("ИГРА СОХРАНЕНА");
+                    return true;
+                })
+                .catch(e => {
+                    console.error("Сохранение SIDE ECHO не удалось", e);
+                    if (reason !== "new-call") showSaveNotice("ОШИБКА СОХРАНЕНИЯ", true);
+                    return false;
+                });
+        }
+
+        // Точка интеграции для будущей системы звонков:
+        // вызывать sideEcho.onNewCall() ТОЛЬКО когда новый звонок уже появился
+        // и его состояние обновлено в соответствующей системе.
+        // Открытие вкладки радио само по себе сохранение НЕ вызывает.
 
         function isPointerOver(instance, clientX, clientY) {
             if (!instance) return false;
@@ -444,7 +997,8 @@ runOnStartup(runtime => {
             return lx >= left && lx <= right && ly >= top && ly <= bottom;
         }
 
-        runtime.addEventListener("pointerdown", (e) => {
+        onRuntime("pointerdown", (e) => {
+            if (e.pointerType === "mouse" && e.button !== 0) return;
             if (runtime.globalVars.isTransitioning === 1) return;
             if (runtime.globalVars.shopOpen === 1) return;
             if (overlay) return;
@@ -453,6 +1007,7 @@ runOnStartup(runtime => {
                 const expanded = !listPanel.isVisible;
                 listPanel.isVisible = expanded;
                 if (listCloseButton) listCloseButton.isVisible = expanded;
+                renderListChecks();
                 listItems.forEach(item => { item.isVisible = expanded; });
                 return;
             }
@@ -470,11 +1025,13 @@ runOnStartup(runtime => {
                 return;
             }
 
-            listItems.forEach(item => {
-                if (isPointerOver(item, e.clientX, e.clientY)) {
-                    item.animationFrame = item.animationFrame === 0 ? 1 : 0;
-                }
-            });
+            for (let i = 0; i < listItems.length; i++) {
+                const item = listItems[i];
+                if (!isPointerOver(item, e.clientX, e.clientY)) continue;
+                listChecks[i] = !listChecks[i];
+                renderListChecks();
+                break;
+            }
         });
         // ------------------------------------------------------------
         // Инициализация
@@ -484,13 +1041,21 @@ runOnStartup(runtime => {
         refreshShopTexts();
         renderDialog();
         // Экспорт данных для Event Sheet (если понадобится)
-        window.sideEcho = { 
+        globalThis.sideEcho = { 
             config: config,
             addCredits: (amt) => { varManager.instVars.Credits += amt; updateCreditsUI(); }, 
             spendCredits: (amt) => { varManager.instVars.Credits -= amt; updateCreditsUI(); }, 
             openShop, closeShop, openHint, closeHint, openEndScreen,
             // Статистика для конечного экрана: addStat("CouriersArrived") и т.д.
-            addStat: (name, amt = 1) => { varManager.instVars[name] += amt; }, 
+            addStat: (name, amt = 1) => { if (name in varManager.instVars) varManager.instVars[name] += amt; },
+            onNewCall: () => saveCheckpoint("new-call"),
+        };
+
+        cleanup = () => {
+            for (const [name, cb] of runtimeListeners) runtime.removeEventListener(name, cb);
+            clearTimeout(creditsFlashTimer);
+            clearTimeout(messageTimer);
+            if (globalThis.sideEcho?.onNewCall) delete globalThis.sideEcho;
         };
     });
 });

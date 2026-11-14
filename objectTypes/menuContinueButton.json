@@ -1,0 +1,9 @@
+{
+	"name": "menuContinueButton",
+	"plugin-id": "Button",
+	"sid": 210422792923828,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

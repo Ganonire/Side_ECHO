@@ -1,0 +1,9 @@
+{
+	"name": "settingsBackButton",
+	"plugin-id": "Button",
+	"sid": 924199987818514,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

@@ -1,0 +1,9 @@
+{
+	"name": "menuSettingsButton",
+	"plugin-id": "Button",
+	"sid": 661823515672234,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}
