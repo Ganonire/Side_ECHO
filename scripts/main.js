@@ -16,6 +16,7 @@ runOnStartup(runtime => {
     const SAVE_FOLDER = "My Games/Side ECHO";
     const SAVE_PATH = `${SAVE_FOLDER}/${SAVE_FILENAME}`;
     const DOCUMENTS_TAG = "<documents>";
+    const PREVIEW_PICKER_TAG = "side-echo-documents";
     const HANDLE_DB = "side-echo-documents-permission-v2";
     const HANDLE_STORE = "directories";
     const HANDLE_ID = "documents-root";
@@ -30,6 +31,7 @@ runOnStartup(runtime => {
     let configPromise = null;
     let projectRootHandle = null;
     let saveFolderProblem = "";
+    let newGameSaveWarning = "";
 
     // Static placeholder panel. No audio/display/fullscreen APIs or settings storage.
     function createSettingsController({beforeOpen = () => true, afterClose = () => {}} = {}) {
@@ -79,17 +81,29 @@ runOnStartup(runtime => {
     // 2. Preview Construct 3 (в том числе установленный PWA): браузерный sandbox.
     //    Один раз выбрать «Документы» вручную, далее используется remembered handle.
     // Ни при каком режиме НЕ подменять отсутствие файла старой копией Local Storage.
+    // File System must exist as a single-global Construct 3 object in project.c3proj.
+    // Browser preview uses its own picker tag, desktop export uses <documents>.
     const fsPlugin = runtime.objects.FileSystem;
     function hasDesktopDocuments() {
         return !!fsPlugin?.desktopFeaturesSupported &&
             typeof fsPlugin.hasPickerTag === "function" &&
             fsPlugin.hasPickerTag(DOCUMENTS_TAG);
     }
-
+    function hasPluginPreviewDocuments() {
+        return !!fsPlugin?.isSupported &&
+            typeof fsPlugin.showFolderPicker === "function" &&
+            typeof fsPlugin.hasPickerTag === "function";
+    }
+    function getNativeSaveTag() {
+        if (hasDesktopDocuments()) return DOCUMENTS_TAG;
+        if (fsPlugin?.hasPickerTag?.(PREVIEW_PICKER_TAG)) return PREVIEW_PICKER_TAG;
+        return null;
+    }
     function supportsPreviewDocuments() {
-        return !runtime.isInWorker && typeof window !== "undefined" &&
-            typeof window.showDirectoryPicker === "function" &&
-            typeof indexedDB !== "undefined";
+        return hasPluginPreviewDocuments() ||
+            (!runtime.isInWorker && typeof window !== "undefined" &&
+             typeof window.showDirectoryPicker === "function" &&
+             typeof indexedDB !== "undefined");
     }
 
     function openHandleDatabase() {
@@ -140,6 +154,25 @@ runOnStartup(runtime => {
     // из клика (до await), иначе браузер потеряет user activation.
     function requestDocumentsFromClick({forcePicker = false} = {}) {
         if (hasDesktopDocuments()) return Promise.resolve(true);
+        // The C3 plugin handles picker permissions and remembers the folder.
+        // Calling showFolderPicker() directly in the click handler keeps user activation.
+        if (hasPluginPreviewDocuments()) {
+            if (!forcePicker && fsPlugin.hasPickerTag(PREVIEW_PICKER_TAG)) {
+                return Promise.resolve(true);
+            }
+            try {
+                return fsPlugin.showFolderPicker({
+                    pickerTag: PREVIEW_PICKER_TAG,
+                    mode: "readwrite",
+                    id: "side-echo-documents",
+                    startIn: "documents"
+                }).then(() => {
+                    saveFolderProblem = "";
+                    return true;
+                });
+            } catch (e) { return Promise.reject(e); }
+        }
+        // Compatibility path for older projects without the File System plugin.
         if (!supportsPreviewDocuments()) {
             return Promise.reject(new Error("Нет доступа к папке Документы в текущем режиме запуска"));
         }
@@ -202,7 +235,30 @@ runOnStartup(runtime => {
 
     function isMissingFileError(e) {
         return e?.name === "NotFoundError" || e?.code === "ENOENT" ||
-            /not found|no such file|не найден/i.test(e?.message || "");
+            /not found|no such file|не найден|cannot find the (?:path|file)|не удается найти указанный путь/i.test(e?.message || "");
+    }
+
+    // Construct 3 File System may reject a missing file with a generic error
+    // like "read file error" or "delete file error" (no ENOENT/NotFoundError).
+    // Never use the error text itself to decide whether savegame.json exists.
+    async function getNativeSaveFolderState(pickerTag) {
+        const root = await fsPlugin.listContent(pickerTag, "", false);
+        if (!root.folders.includes("My Games")) return {folderExists: false, fileExists: false};
+        const myGames = await fsPlugin.listContent(pickerTag, "My Games", false);
+        if (!myGames.folders.includes("Side ECHO")) return {folderExists: false, fileExists: false};
+        const gameFolder = await fsPlugin.listContent(pickerTag, SAVE_FOLDER, false);
+        return {folderExists: true, fileExists: gameFolder.files.includes(SAVE_FILENAME)};
+    }
+
+    async function ensureNativeSaveFolder(pickerTag) {
+        const root = await fsPlugin.listContent(pickerTag, "", false);
+        if (!root.folders.includes("My Games")) {
+            await fsPlugin.createFolder(pickerTag, "My Games");
+        }
+        const myGames = await fsPlugin.listContent(pickerTag, "My Games", false);
+        if (!myGames.folders.includes("Side ECHO")) {
+            await fsPlugin.createFolder(pickerTag, SAVE_FOLDER);
+        }
     }
 
     // Строго читаем savegame.json с диска; удалённый/повреждённый файл
@@ -210,9 +266,17 @@ runOnStartup(runtime => {
     async function readCheckpoint() {
         try {
             let content;
-            if (hasDesktopDocuments()) {
+            const nativeTag = getNativeSaveTag();
+            if (nativeTag) {
+                // An absent save is normal (especially before the first purchase).
+                // Check the directory listing before trying to read it.
+                const state = await getNativeSaveFolderState(nativeTag);
+                if (!state.fileExists) {
+                    saveFolderProblem = "";
+                    return null;
+                }
                 content = await fsPlugin.readFile({
-                    pickerTag: DOCUMENTS_TAG, folderPath: SAVE_PATH, mode: "text"
+                    pickerTag: nativeTag, folderPath: SAVE_PATH, mode: "text"
                 });
             } else {
                 const handle = await getPreviewSaveHandle(false);
@@ -232,36 +296,19 @@ runOnStartup(runtime => {
         }
     }
 
-    // В некоторых desktop-обёртках повторный вызов createFolder() на уже
-    // существующей папке возвращает EEXIST. На второй покупке такой сбой
-    // прерывал запись ДО writeFile(). Перезаписываем файл напрямую; папку
-    // создаём только тогда, когда путь ещё не существует.
-    function isExistingFolderError(e) {
-        return e?.code === "EEXIST" || e?.name === "AlreadyExistsError" ||
-            e?.name === "InvalidModificationError" ||
-            /already exists|file exists|уже существует/i.test(e?.message || "");
-    }
-
     async function writeCheckpoint(data) {
         const contents = JSON.stringify(data, null, 2) + "\n";
-        if (hasDesktopDocuments()) {
-            const write = () => fsPlugin.writeFile({
-                pickerTag: DOCUMENTS_TAG,
+        const nativeTag = getNativeSaveTag();
+        if (nativeTag) {
+            // Create only the missing folders; don't depend on generic write
+            // errors to decide whether directory creation is necessary.
+            await ensureNativeSaveFolder(nativeTag);
+            await fsPlugin.writeFile({
+                pickerTag: nativeTag,
                 folderPath: SAVE_PATH,
-                mode: "overwrite", // заменить всё содержимое, НЕ append
+                mode: "overwrite",
                 data: contents
             });
-            try {
-                await write(); // обычный случай: файл и папка уже существуют
-            } catch (e) {
-                if (!isMissingFileError(e)) throw e;
-                // Первая покупка: создаём недостающую папку и пробуем снова.
-                try { await fsPlugin.createFolder(DOCUMENTS_TAG, SAVE_FOLDER); }
-                catch (folderError) {
-                    if (!isExistingFolderError(folderError)) throw folderError;
-                }
-                await write();
-            }
         } else {
             const handle = await getPreviewSaveHandle(true);
             if (!handle) throw new Error("Разреши доступ к папке Документы через Настройки");
@@ -284,9 +331,12 @@ runOnStartup(runtime => {
     }
 
     async function deleteCheckpoint() {
-        if (hasDesktopDocuments()) {
-            try { await fsPlugin.delete(DOCUMENTS_TAG, SAVE_PATH, false); }
-            catch (e) { if (!isMissingFileError(e)) throw e; }
+        const nativeTag = getNativeSaveTag();
+        if (nativeTag) {
+            // Deleting a non-existent save may produce a generic "delete file
+            // error" in Construct, even though nothing is wrong.
+            const state = await getNativeSaveFolderState(nativeTag);
+            if (state.fileExists) await fsPlugin.delete(nativeTag, SAVE_PATH, false);
         } else {
             const handle = await getPreviewSaveHandle(false);
             if (handle) {
@@ -310,6 +360,7 @@ runOnStartup(runtime => {
         const continueButton = get("menuContinueButton");
         const settingsButton = get("menuSettingsButton");
         const loreButton = get("menuLoreButton");
+        const exitButton = get("menuExitButton");
         const folderButton = get("settingsPickSaveFolderButton");
         const infoText = get("settingsInfoText");
         let checkpoint = null;
@@ -317,7 +368,7 @@ runOnStartup(runtime => {
         loreButton.isEnabled = false;
         continueButton.isEnabled = false;
         settingsButton.isEnabled = true;
-        const menuButtons = [newButton, continueButton, settingsButton, loreButton, get("menuTitleText")].filter(Boolean);
+        const menuButtons = [newButton, continueButton, settingsButton, loreButton, exitButton, get("menuTitleText")].filter(Boolean);
         const settingsUI = createSettingsController({
             beforeOpen: () => { menuButtons.forEach(o => o.isVisible = false); return true; },
             afterClose: () => { menuButtons.forEach(o => o.isVisible = true); }
@@ -326,12 +377,12 @@ runOnStartup(runtime => {
         async function updateFolderInfo() {
             if (!infoText) return;
             if (hasDesktopDocuments()) {
-                infoText.text = "СОХРАНЕНИЯ:\nДокументы\\My Games\\Side ECHO\\savegame.json\nПапка создаётся автоматически после покупки.";
+                infoText.text = "СОХРАНЕНИЯ:\nДокументы\\My Games\\Side ECHO\\savegame.json\nАвтосохранение при покупке и новом звонке.";
                 if (folderButton) { folderButton.isEnabled = false; folderButton.isVisible = false; }
             } else if (!supportsPreviewDocuments()) {
                 infoText.text = "Недоступна запись в Документы.\nДля автоматических сохранений нужна Windows-версия игры.";
                 if (folderButton) folderButton.isEnabled = false;
-            } else if (await hasDocumentsPermission()) {
+            } else if (getNativeSaveTag() === PREVIEW_PICKER_TAG || await hasDocumentsPermission()) {
                 infoText.text = "ПАПКА ДОКУМЕНТЫ ПОДКЛЮЧЕНА\nMy Games\\Side ECHO\\savegame.json\nПуть запомнен для следующих запусков.";
                 if (folderButton) folderButton.isEnabled = true;
             } else if (projectRootHandle) {
@@ -351,7 +402,8 @@ runOnStartup(runtime => {
         }
 
         await queuedStorage.catch(() => {});
-        if (!hasDesktopDocuments()) {
+        if (!hasDesktopDocuments() && !hasPluginPreviewDocuments() &&
+            typeof indexedDB !== "undefined") {
             try { projectRootHandle = await getRememberedDocuments(); }
             catch (e) { console.warn("Не удалось восстановить доступ к Документам", e); }
         }
@@ -382,20 +434,19 @@ runOnStartup(runtime => {
             opening = true;
             newButton.isEnabled = false;
             continueButton.isEnabled = false;
-            // Получаем разрешение непосредственно из клика на кнопку.
+            newGameSaveWarning = "";
+            // Permissions must be requested directly in the click handler.
+            // A missing save, failed picker or inaccessible directory MUST NOT
+            // prevent starting a new game. Saving will report errors separately.
             const request = requestDocumentsFromClick();
             void request.then(() => storageOperation(deleteCheckpoint))
+                .catch(e => {
+                    console.warn("Новая игра: старое сохранение не удалено", e);
+                    newGameSaveWarning = "НЕ УДАЛОСЬ ОЧИСТИТЬ СОХРАНЕНИЕ";
+                })
                 .then(() => {
                     loadForNextGame = null;
                     runtime.goToLayout(GAME_LAYOUT);
-                })
-                .catch(async e => {
-                    console.warn("Новая игра: папка Документы недоступна", e);
-                    saveFolderProblem = e?.name === "AbortError" ? "Выбор папки отменён" : (e.message || String(e));
-                    opening = false;
-                    newButton.isEnabled = true;
-                    await refreshCheckpoint();
-                    settingsUI.open();
                 });
         });
 
@@ -633,13 +684,15 @@ runOnStartup(runtime => {
             renderQuestions();
         }
 
-        // Следующий звонок: номер растёт, вопросы и чек-лист начинаются заново,
-        // окно возвращается на вкладку рации, результаты приборов сбрасываются.
-        // Контрольная точка сохраняется (reason "new-call", без уведомления).
+        // Фиксируем отметки завершённого звонка, не сбрасывая видимый чек-лист.
+        // Отметки остаются активными после автосохранения при новом звонке,
+        // а snapshot текущего звонка хранит их для восстановления по «Продолжить».
         function startNextCall() {
+            checklistHistory[String(callNumber)] = listMarks.slice();
             callNumber += 1;
             resetQuestions();
-            listMarks.fill(0);
+            // Не очищаем listMarks: галочки и крестики должны переживать
+            // переход между звонками и любое сохранение.
             renderListChecks();
             currentDevice = null;
             dialogTab = "radio";
@@ -665,7 +718,10 @@ runOnStartup(runtime => {
         const shopParts = SHOP_PART_NAMES.flatMap(getAll);
         const coveredButtons = [...energyButtons, getOne("changeFrameButton")].filter(Boolean);
 
-        let coffeeInStock = restoredSave?.coffeeInStock === true;
+        // Наличие кофе уже хранилось в старых сохранениях. Для новых файлов
+        // допускаем также явный блок inventory, сохраняя обратную совместимость.
+        let coffeeInStock = (typeof restoredSave?.inventory?.coffeeInStock === "boolean"
+            ? restoredSave.inventory.coffeeInStock : restoredSave?.coffeeInStock) === true;
         let messageTimer = null;
 
         function showShopMessage(text) {
@@ -1025,9 +1081,24 @@ runOnStartup(runtime => {
 
         if (listPanel) listPanel.isVisible = false;
         if (listCloseButton) listCloseButton.isVisible = false;
-        // Отметки по строкам: 0 — нет, 1 — галочка (подтверждено), 2 — крестик (опровергнуто).
+        // Отметки по строкам: 0 — нет, 1 — галочка, 2 — крестик.
+        // Для старых savegame.json без истории берём прежнее поле listMarks.
+        // История привязана к номеру звонка, чтобы сброс на новом звонке
+        // не стирал заметки предыдущих звонков из файла сохранения.
+        const checklistHistory = Object.create(null);
+        const savedHistory = restoredSave?.checklistHistory;
+        if (savedHistory && typeof savedHistory === "object" && !Array.isArray(savedHistory)) {
+            for (const [key, marks] of Object.entries(savedHistory)) {
+                if (!/^[1-9]\d*$/.test(key) || !Array.isArray(marks)) continue;
+                checklistHistory[key] = listRowTexts.map((_, i) =>
+                    marks[i] === 1 || marks[i] === 2 ? marks[i] : 0);
+            }
+        }
+        const restoredMarks = Array.isArray(restoredSave?.listMarks)
+            ? restoredSave.listMarks
+            : (checklistHistory[String(callNumber)] ?? []);
         const listMarks = listRowTexts.map((_, i) => {
-            const saved = restoredSave?.listMarks?.[i];
+            const saved = restoredMarks[i];
             return saved === 1 || saved === 2 ? saved : 0;
         });
         function renderListChecks() {
@@ -1055,17 +1126,31 @@ runOnStartup(runtime => {
         function makeCheckpoint() {
             const variables = {};
             for (const name of VAR_NAMES) variables[name] = varManager.instVars[name];
+            // В snapshot попадают и актуальные отметки, и завершённые звонки.
+            // Не передаём ссылки на живые массивы: следующая смена звонка
+            // или клик по чекбоксу не должны менять уже созданный snapshot.
+            const currentMarks = listMarks.slice();
+            const allCallMarks = Object.fromEntries(
+                Object.entries(checklistHistory).map(([call, marks]) => [call, marks.slice()]));
+            allCallMarks[String(callNumber)] = currentMarks.slice();
             return {
                 version: 2,
                 revision: ++saveRevision,
                 savedAt: new Date().toISOString(),
                 variables,
                 roomSelect: runtime.globalVars.roomSelect === 1 ? 1 : 0,
+                // Сохраняем старое поле + явный перечень купленных предметов.
+                // CatFood уже учтён в variables и не теряется при загрузке.
                 coffeeInStock,
+                inventory: {
+                    coffeeInStock,
+                    catFood: varManager.instVars.CatFood
+                },
                 dialog: { tab: dialogTab === "questions" ? "radio" : dialogTab, device: currentDevice },
                 questionsAsked: questionsAsked.map(Boolean),
                 callNumber,
-                listMarks: listMarks.slice()
+                listMarks: currentMarks,
+                checklistHistory: allCallMarks
             };
         }
 
@@ -1075,11 +1160,15 @@ runOnStartup(runtime => {
             saveNoticeText.colorRgb = isError ? [1, 0.38, 0.36] : [0.36, 1, 0.55];
             saveNoticeText.opacity = 1;
             saveNoticeText.isVisible = true;
-            saveNoticeExpires = Date.now() + 2500;
+            saveNoticeExpires = Date.now() + 3500;
             // Корректная позиция даже если покупка сделана сразу после смены комнаты.
             const view = viewRect(saveNoticeText.layer);
             const off = followOffsets.get(saveNoticeText);
             if (off) { saveNoticeText.x = view.cx + off.dx; saveNoticeText.y = view.cy + off.dy; }
+        }
+        if (newGameSaveWarning) {
+            showSaveNotice(newGameSaveWarning, true);
+            newGameSaveWarning = "";
         }
 
         // Возвращает Promise<boolean>: true — файл записан и проверен на диске.
@@ -1092,12 +1181,15 @@ runOnStartup(runtime => {
             const snapshot = makeCheckpoint();
             return storageOperation(() => writeCheckpoint(snapshot))
                 .then(() => {
-                    if (reason === "purchase") showSaveNotice("ИГРА СОХРАНЕНА");
+                    if (reason === "purchase" || reason === "new-call") {
+                        showSaveNotice("ИГРА СОХРАНЕНА");
+                    }
                     return true;
                 })
                 .catch(e => {
                     console.error("Сохранение SIDE ECHO не удалось", e);
-                    if (reason !== "new-call") showSaveNotice("ОШИБКА СОХРАНЕНИЯ", true);
+                    saveFolderProblem = e?.message || String(e);
+                    showSaveNotice("ОШИБКА СОХРАНЕНИЯ", true);
                     return false;
                 });
         }

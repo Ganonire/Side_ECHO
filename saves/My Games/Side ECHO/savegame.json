@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "revision": 2,
+  "savedAt": "2026-11-14T22:25:02.777Z",
+  "variables": {
+    "Energy": 6,
+    "roomSelect": false,
+    "Credits": 5,
+    "CatFood": 0,
+    "CouriersArrived": 0,
+    "CouriersLost": 0,
+    "ZonesLost": 0,
+    "EchoTalks": 0,
+    "EnergySpent": 9
+  },
+  "roomSelect": 0,
+  "coffeeInStock": false,
+  "inventory": {
+    "coffeeInStock": false,
+    "catFood": 0
+  },
+  "dialog": {
+    "tab": "radio",
+    "device": null
+  },
+  "questionsAsked": [
+    false,
+    false,
+    false
+  ],
+  "callNumber": 2,
+  "listMarks": [
+    1,
+    1,
+    2,
+    2,
+    2
+  ],
+  "checklistHistory": {
+    "1": [
+      1,
+      1,
+      2,
+      2,
+      2
+    ],
+    "2": [
+      1,
+      1,
+      2,
+      2,
+      2
+    ]
+  }
+}

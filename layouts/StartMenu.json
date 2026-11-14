@@ -1,517 +1,552 @@
 {
-	"name": "StartMenu",
-	"layers": [
-		{
-			"name": "Menu",
-			"overriden": 0,
-			"subLayers": [],
-			"instances": [
-				{
-					"type": "endPanel",
-					"properties": {
-						"initially-visible": true,
-						"initial-animation": "Animation 1",
-						"initial-frame": 0,
-						"enable-collisions": true,
-						"live-preview": false
-					},
-					"uid": 67,
-					"sid": 926829881758927,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"materialSurfaceType": "smooth",
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 960,
-						"y": 540,
-						"width": 1920,
-						"height": 1080,
-						"originX": 0.5,
-						"originY": 0.5,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						],
-						"z": 0,
-						"angle": 0
-					}
-				},
-				{
-					"type": "menuTitleText",
-					"properties": {
-						"text": "SIDE ECHO",
-						"enable-bbcode": false,
-						"font": "Arial",
-						"size": 94,
-						"line-height": 0,
-						"bold": false,
-						"italic": false,
-						"color": [
-							0.82,
-							0.91,
-							0.87,
-							1
-						],
-						"horizontal-alignment": "center",
-						"vertical-alignment": "center",
-						"wrapping": "word",
-						"text-direction": "ltr",
-						"icon-set": -1,
-						"initially-visible": true,
-						"origin": "top-left",
-						"read-aloud": false
-					},
-					"uid": 68,
-					"sid": 992274018896594,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"materialSurfaceType": "smooth",
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 360,
-						"y": 157,
-						"width": 1200,
-						"height": 141,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						],
-						"z": 0,
-						"angle": 0
-					}
-				},
-				{
-					"type": "menuNewGameButton",
-					"properties": {
-						"type": "button",
-						"text": "НОВАЯ ИГРА",
-						"tooltip": "",
-						"initially-visible": true,
-						"enabled": true,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 69,
-					"sid": 591550641072764,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 670,
-						"y": 388,
-						"width": 580,
-						"height": 94,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				},
-				{
-					"type": "menuContinueButton",
-					"properties": {
-						"type": "button",
-						"text": "ПРОДОЛЖИТЬ",
-						"tooltip": "",
-						"initially-visible": true,
-						"enabled": false,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 70,
-					"sid": 991418403087637,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 670,
-						"y": 512,
-						"width": 580,
-						"height": 94,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				},
-				{
-					"type": "menuSettingsButton",
-					"properties": {
-						"type": "button",
-						"text": "НАСТРОЙКИ",
-						"tooltip": "Настройки игры",
-						"initially-visible": true,
-						"enabled": true,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 71,
-					"sid": 985766669752613,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 670,
-						"y": 636,
-						"width": 580,
-						"height": 94,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				},
-				{
-					"type": "menuLoreButton",
-					"properties": {
-						"type": "button",
-						"text": "ЛОР И АВТОРЫ",
-						"tooltip": "Будет доступно позже",
-						"initially-visible": true,
-						"enabled": false,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 72,
-					"sid": 384160017098268,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 670,
-						"y": 760,
-						"width": 580,
-						"height": 94,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				}
-			],
-			"sid": 693657061630353,
-			"effectTypes": [],
-			"isInitiallyVisible": true,
-			"isInitiallyInteractive": true,
-			"isHTMLElementsLayer": false,
-			"color": [
-				1,
-				1,
-				1,
-				1
-			],
-			"backgroundColor": [
-				0.03,
-				0.04,
-				0.04,
-				1
-			],
-			"isTransparent": false,
-			"sampling": "auto",
-			"parallaxX": 1,
-			"parallaxY": 1,
-			"scaleRate": 1,
-			"forceOwnTexture": false,
-			"renderingMode": "3d",
-			"drawOrder": "z-order",
-			"useRenderCells": false,
-			"blendMode": "normal",
-			"zElevation": 0,
-			"global": false
-		},
-		{
-			"name": "Options",
-			"overriden": 0,
-			"subLayers": [],
-			"instances": [
-				{
-					"type": "endPanel",
-					"properties": {
-						"initially-visible": false,
-						"initial-animation": "Animation 1",
-						"initial-frame": 0,
-						"enable-collisions": true,
-						"live-preview": false
-					},
-					"uid": 73,
-					"sid": 776181061870944,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"materialSurfaceType": "smooth",
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 960,
-						"y": 540,
-						"width": 1910,
-						"height": 1070,
-						"originX": 0.5,
-						"originY": 0.5,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						],
-						"z": 0,
-						"angle": 0
-					}
-				},
-				{
-					"type": "settingsTitleText",
-					"properties": {
-						"text": "НАСТРОЙКИ",
-						"enable-bbcode": false,
-						"font": "Arial",
-						"size": 68,
-						"line-height": 0,
-						"bold": true,
-						"italic": false,
-						"color": [
-							0.83,
-							0.94,
-							0.87,
-							1
-						],
-						"horizontal-alignment": "center",
-						"vertical-alignment": "center",
-						"wrapping": "word",
-						"text-direction": "ltr",
-						"icon-set": -1,
-						"initially-visible": false,
-						"origin": "top-left",
-						"read-aloud": false
-					},
-					"uid": 74,
-					"sid": 686028377155751,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"materialSurfaceType": "smooth",
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 500,
-						"y": 170,
-						"width": 920,
-						"height": 90,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						],
-						"z": 0,
-						"angle": 0
-					}
-				},
-				{
-					"type": "settingsInfoText",
-					"properties": {
-						"text": "Сохранения: Документы\\My Games\\Side ECHO\\savegame.json",
-						"enable-bbcode": false,
-						"font": "Arial",
-						"size": 29,
-						"line-height": 0,
-						"bold": false,
-						"italic": false,
-						"color": [
-							0.6,
-							0.72,
-							0.68,
-							1
-						],
-						"horizontal-alignment": "center",
-						"vertical-alignment": "center",
-						"wrapping": "word",
-						"text-direction": "ltr",
-						"icon-set": -1,
-						"initially-visible": false,
-						"origin": "top-left",
-						"read-aloud": false
-					},
-					"uid": 75,
-					"sid": 703310560211938,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"materialSurfaceType": "smooth",
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 390,
-						"y": 406,
-						"width": 1140,
-						"height": 190,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						],
-						"z": 0,
-						"angle": 0
-					}
-				},
-				{
-					"type": "settingsPickSaveFolderButton",
-					"properties": {
-						"type": "button",
-						"text": "ДОСТУП К ДОКУМЕНТАМ",
-						"tooltip": "Только в Preview: выберите папку «Документы» один раз",
-						"initially-visible": false,
-						"enabled": true,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 76,
-					"sid": 502999651123138,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 650,
-						"y": 672,
-						"width": 620,
-						"height": 88,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				},
-				{
-					"type": "settingsBackButton",
-					"properties": {
-						"type": "button",
-						"text": "НАЗАД",
-						"tooltip": "",
-						"initially-visible": false,
-						"enabled": true,
-						"auto-font-size": true,
-						"checked": false,
-						"id": "",
-						"class": ""
-					},
-					"uid": 77,
-					"sid": 691519290542512,
-					"tags": "",
-					"instanceVariables": {},
-					"behaviors": {},
-					"showing": true,
-					"locked": false,
-					"world": {
-						"x": 784,
-						"y": 874,
-						"width": 352,
-						"height": 80,
-						"originX": 0,
-						"originY": 0,
-						"color": [
-							1,
-							1,
-							1,
-							1
-						]
-					}
-				}
-			],
-			"sid": 819088965775461,
-			"effectTypes": [],
-			"isInitiallyVisible": true,
-			"isInitiallyInteractive": true,
-			"isHTMLElementsLayer": false,
-			"color": [
-				1,
-				1,
-				1,
-				1
-			],
-			"backgroundColor": [
-				0,
-				0,
-				0,
-				0
-			],
-			"isTransparent": true,
-			"sampling": "auto",
-			"parallaxX": 1,
-			"parallaxY": 1,
-			"scaleRate": 1,
-			"forceOwnTexture": false,
-			"renderingMode": "3d",
-			"drawOrder": "z-order",
-			"useRenderCells": false,
-			"blendMode": "normal",
-			"zElevation": 0,
-			"global": false
-		}
-	],
-	"sid": 910524462868364,
-	"nonworld-instances": [],
-	"effectTypes": [],
-	"width": 1920,
-	"height": 1080,
-	"unboundedScrolling": false,
-	"sampling": "auto",
-	"ambientLight": 0.03,
-	"vpX": 0.5,
-	"vpY": 0.5,
-	"projection": "perspective",
-	"eventSheet": null
+  "name": "StartMenu",
+  "layers": [
+    {
+      "name": "Menu",
+      "overriden": 0,
+      "subLayers": [],
+      "instances": [
+        {
+          "type": "endPanel",
+          "properties": {
+            "initially-visible": true,
+            "initial-animation": "Animation 1",
+            "initial-frame": 0,
+            "enable-collisions": true,
+            "live-preview": false
+          },
+          "uid": 67,
+          "sid": 926829881758927,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "materialSurfaceType": "smooth",
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 960,
+            "y": 540,
+            "width": 1920,
+            "height": 1080,
+            "originX": 0.5,
+            "originY": 0.5,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "z": 0,
+            "angle": 0
+          }
+        },
+        {
+          "type": "menuTitleText",
+          "properties": {
+            "text": "SIDE ECHO",
+            "enable-bbcode": false,
+            "font": "Arial",
+            "size": 94,
+            "line-height": 0,
+            "bold": false,
+            "italic": false,
+            "color": [
+              0.82,
+              0.91,
+              0.87,
+              1
+            ],
+            "horizontal-alignment": "center",
+            "vertical-alignment": "center",
+            "wrapping": "word",
+            "text-direction": "ltr",
+            "icon-set": -1,
+            "initially-visible": true,
+            "origin": "top-left",
+            "read-aloud": false
+          },
+          "uid": 68,
+          "sid": 992274018896594,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "materialSurfaceType": "smooth",
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 360,
+            "y": 157,
+            "width": 1200,
+            "height": 141,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "z": 0,
+            "angle": 0
+          }
+        },
+        {
+          "type": "menuNewGameButton",
+          "properties": {
+            "type": "button",
+            "text": "НОВАЯ ИГРА",
+            "tooltip": "",
+            "initially-visible": true,
+            "enabled": true,
+            "auto-font-size": true,
+            "checked": false,
+            "id": "",
+            "class": ""
+          },
+          "uid": 69,
+          "sid": 591550641072764,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 670,
+            "y": 388,
+            "width": 580,
+            "height": 94,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "type": "menuContinueButton",
+          "properties": {
+            "type": "button",
+            "text": "ПРОДОЛЖИТЬ",
+            "tooltip": "",
+            "initially-visible": true,
+            "enabled": false,
+            "auto-font-size": true,
+            "checked": false,
+            "id": "",
+            "class": ""
+          },
+          "uid": 70,
+          "sid": 991418403087637,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 670,
+            "y": 512,
+            "width": 580,
+            "height": 94,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "type": "menuSettingsButton",
+          "properties": {
+            "type": "button",
+            "text": "НАСТРОЙКИ",
+            "tooltip": "Настройки игры",
+            "initially-visible": true,
+            "enabled": true,
+            "auto-font-size": true,
+            "checked": false,
+            "id": "",
+            "class": ""
+          },
+          "uid": 71,
+          "sid": 985766669752613,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 670,
+            "y": 636,
+            "width": 580,
+            "height": 94,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "type": "menuLoreButton",
+          "properties": {
+            "type": "button",
+            "text": "ЛОР И АВТОРЫ",
+            "tooltip": "Будет доступно позже",
+            "initially-visible": true,
+            "enabled": false,
+            "auto-font-size": true,
+            "checked": false,
+            "id": "",
+            "class": ""
+          },
+          "uid": 72,
+          "sid": 384160017098268,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 670,
+            "y": 760,
+            "width": 580,
+            "height": 94,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "type": "menuExitButton",
+          "properties": {
+            "type": "button",
+            "text": "ВЫХОД ИЗ ИГРЫ",
+            "tooltip": "Закрыть игру (в Windows-сборке)",
+            "initially-visible": true,
+            "enabled": true,
+            "auto-font-size": true,
+            "checked": false,
+            "id": "",
+            "class": ""
+          },
+          "uid": 159,
+          "sid": 890778536730191,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 670,
+            "y": 884,
+            "width": 580,
+            "height": 94,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        }
+      ],
+      "sid": 693657061630353,
+      "effectTypes": [],
+      "isInitiallyVisible": true,
+      "isInitiallyInteractive": true,
+      "isHTMLElementsLayer": false,
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "backgroundColor": [
+        0.03,
+        0.04,
+        0.04,
+        1
+      ],
+      "isTransparent": false,
+      "sampling": "auto",
+      "parallaxX": 1,
+      "parallaxY": 1,
+      "scaleRate": 1,
+      "forceOwnTexture": false,
+      "renderingMode": "3d",
+      "drawOrder": "z-order",
+      "useRenderCells": false,
+      "blendMode": "normal",
+      "zElevation": 0,
+      "global": false
+    },
+    {
+      "name": "Options",
+      "overriden": 0,
+      "subLayers": [],
+      "instances": [
+        {
+          "type": "endPanel",
+          "properties": {
+            "initially-visible": false,
+            "initial-animation": "Animation 1",
+            "initial-frame": 0,
+            "enable-collisions": true,
+            "live-preview": false
+          },
+          "uid": 73,
+          "sid": 776181061870944,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "materialSurfaceType": "smooth",
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 960,
+            "y": 540,
+            "width": 1910,
+            "height": 1070,
+            "originX": 0.5,
+            "originY": 0.5,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "z": 0,
+            "angle": 0
+          }
+        },
+        {
+          "type": "settingsTitleText",
+          "properties": {
+            "text": "НАСТРОЙКИ",
+            "enable-bbcode": false,
+            "font": "Arial",
+            "size": 68,
+            "line-height": 0,
+            "bold": true,
+            "italic": false,
+            "color": [
+              0.83,
+              0.94,
+              0.87,
+              1
+            ],
+            "horizontal-alignment": "center",
+            "vertical-alignment": "center",
+            "wrapping": "word",
+            "text-direction": "ltr",
+            "icon-set": -1,
+            "initially-visible": false,
+            "origin": "top-left",
+            "read-aloud": false
+          },
+          "uid": 74,
+          "sid": 686028377155751,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "materialSurfaceType": "smooth",
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 500,
+            "y": 170,
+            "width": 920,
+            "height": 90,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "z": 0,
+            "angle": 0
+          }
+        },
+        {
+          "type": "settingsInfoText",
+          "properties": {
+            "text": "Сохранения: Документы\\My Games\\Side ECHO\\savegame.json",
+            "enable-bbcode": false,
+            "font": "Arial",
+            "size": 29,
+            "line-height": 0,
+            "bold": false,
+            "italic": false,
+            "color": [
+              0.6,
+              0.72,
+              0.68,
+              1
+            ],
+            "horizontal-alignment": "center",
+            "vertical-alignment": "center",
+            "wrapping": "word",
+            "text-direction": "ltr",
+            "icon-set": -1,
+            "initially-visible": false,
+            "origin": "top-left",
+            "read-aloud": false
+          },
+          "uid": 75,
+          "sid": 703310560211938,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "materialSurfaceType": "smooth",
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 390,
+            "y": 406,
+            "width": 1140,
+            "height": 190,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "z": 0,
+            "angle": 0
+          }
+        },
+        {
+          "type": "settingsPickSaveFolderButton",
+          "properties": {
+            "type": "button",
+            "text": "ДОСТУП К ДОКУМЕНТАМ",
+            "tooltip": "Только в Preview: выберите папку «Документы» один раз",
+            "initially-visible": false,
+            "enabled": true,
+            "auto-font-size": true,
+            "checked": false,
+            "id": "",
+            "class": ""
+          },
+          "uid": 76,
+          "sid": 502999651123138,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 650,
+            "y": 672,
+            "width": 620,
+            "height": 88,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "type": "settingsBackButton",
+          "properties": {
+            "type": "button",
+            "text": "НАЗАД",
+            "tooltip": "",
+            "initially-visible": false,
+            "enabled": true,
+            "auto-font-size": true,
+            "checked": false,
+            "id": "",
+            "class": ""
+          },
+          "uid": 77,
+          "sid": 691519290542512,
+          "tags": "",
+          "instanceVariables": {},
+          "behaviors": {},
+          "showing": true,
+          "locked": false,
+          "world": {
+            "x": 784,
+            "y": 874,
+            "width": 352,
+            "height": 80,
+            "originX": 0,
+            "originY": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        }
+      ],
+      "sid": 819088965775461,
+      "effectTypes": [],
+      "isInitiallyVisible": true,
+      "isInitiallyInteractive": true,
+      "isHTMLElementsLayer": false,
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "backgroundColor": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isTransparent": true,
+      "sampling": "auto",
+      "parallaxX": 1,
+      "parallaxY": 1,
+      "scaleRate": 1,
+      "forceOwnTexture": false,
+      "renderingMode": "3d",
+      "drawOrder": "z-order",
+      "useRenderCells": false,
+      "blendMode": "normal",
+      "zElevation": 0,
+      "global": false
+    }
+  ],
+  "sid": 910524462868364,
+  "nonworld-instances": [],
+  "effectTypes": [],
+  "width": 1920,
+  "height": 1080,
+  "unboundedScrolling": false,
+  "sampling": "auto",
+  "ambientLight": 0.03,
+  "vpX": 0.5,
+  "vpY": 0.5,
+  "projection": "perspective",
+  "eventSheet": "MenuEvents"
 }
