@@ -141,7 +141,14 @@
 			"menuTitleText",
 			"settingsTitleText",
 			"settingsInfoText",
-			"saveNoticeText"
+			"saveNoticeText",
+			"askButton",
+			"transferButton",
+			"declineButton",
+			"questionItemText",
+			"listRowText",
+			"listCheckCell",
+			"listCrossCell"
 		],
 		"subfolders": []
 	},

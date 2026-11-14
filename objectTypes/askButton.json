@@ -1,0 +1,9 @@
+{
+	"name": "askButton",
+	"plugin-id": "Button",
+	"sid": 590593562580024,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

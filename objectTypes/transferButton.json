@@ -1,0 +1,9 @@
+{
+	"name": "transferButton",
+	"plugin-id": "Button",
+	"sid": 537500596450892,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}

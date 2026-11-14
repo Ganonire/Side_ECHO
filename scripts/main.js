@@ -19,7 +19,6 @@ runOnStartup(runtime => {
     const HANDLE_DB = "side-echo-documents-permission-v2";
     const HANDLE_STORE = "directories";
     const HANDLE_ID = "documents-root";
-    const CHECK_NAMES = ["listItem1", "listItem2", "listItem3"];
     const SETTINGS_TYPES = ["endPanel", "settingsTitleText", "settingsInfoText", "settingsBackButton", "settingsPickSaveFolderButton"];
     const GAME_LAYOUT = "Layout 1";
     const MENU_LAYOUT = "StartMenu";
@@ -472,6 +471,12 @@ runOnStartup(runtime => {
         const dialogText = getOne("dialogText");
         const dialogTabRadio = getOne("dialogTabRadio");
         const dialogTabDevices = getOne("dialogTabDevices");
+        // Режим рации: три кнопки и список вопросов (третья «вкладка»).
+        const askButton = getOne("askButton");
+        const transferButton = getOne("transferButton");
+        const declineButton = getOne("declineButton");
+        const radioButtons = [askButton, transferButton, declineButton].filter(Boolean);
+        const questionItems = getAll("questionItemText").sort((a, b) => a.y - b.y);
         const cameraObj = getOne("cameraObj");
         if (cameraObj) cameraObj.x = runtime.globalVars.roomSelect === 1 ? 2905 : 935;
 
@@ -547,18 +552,100 @@ runOnStartup(runtime => {
         // ------------------------------------------------------------
         // ДИАЛОГОВОЕ ОКНО
         // ------------------------------------------------------------
-        const RADIO_TEXT = "Звонок Nº 1";
+        // Номер звонка. Шаблон надписи берётся из tik.json (texts.radioCall):
+        // последнее число в нём заменяется текущим номером.
+        const CALL_TEMPLATE = config.texts?.radioCall ?? "Звонок Nº 1";
+        let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1
+            ? restoredSave.callNumber : 1;
+        const callText = () => CALL_TEMPLATE.replace(/\d+\s*$/, String(callNumber));
         let dialogTab = restoredSave?.dialog?.tab === "devices" ? "devices" : "radio";
         let currentDevice = Number.isInteger(restoredSave?.dialog?.device)
             ? restoredSave.dialog.device : null;
 
+        // Режимы окна: "radio" (рация), "questions" (рация + список вопросов,
+        // третья «вкладка») и "devices" (приборы). Кнопки рации видны
+        // в первых двух режимах.
         function renderDialog() {
-            if (dialogTabRadio) dialogTabRadio.animationFrame = dialogTab === "radio" ? 1 : 0;
-            if (dialogTabDevices) dialogTabDevices.animationFrame = dialogTab === "devices" ? 1 : 0;
+            const radioMode = dialogTab !== "devices";
+            if (dialogTabRadio) dialogTabRadio.animationFrame = radioMode ? 1 : 0;
+            if (dialogTabDevices) dialogTabDevices.animationFrame = radioMode ? 0 : 1;
+            radioButtons.forEach(b => { b.isVisible = radioMode; });
+            renderQuestions();
             if (!dialogText) return;
-            
-            if (dialogTab === "radio") dialogText.text = RADIO_TEXT;
+
+            if (radioMode) dialogText.text = callText();
             else dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
+        }
+
+        // ------------------------------------------------------------
+        // ВОПРОСЫ СОБЕСЕДНИКУ. Тексты лежат в tik.json -> questions.
+        // Каждый вопрос можно задать один раз: после этого он серый и
+        // зачёркнутый. При наведении незаданный вопрос подчёркивается.
+        // ------------------------------------------------------------
+        const questions = (Array.isArray(config.questions) && config.questions.length
+            ? config.questions
+            : ["Какой груз вы доставляете?",
+               "Какие погодные условия в вашем районе?",
+               "В какой местности вы сейчас находитесь?"]
+        ).slice(0, questionItems.length);
+        const questionsAsked = questions.map((_, i) => restoredSave?.questionsAsked?.[i] === true);
+        let hoveredQuestion = -1;
+        questionItems.forEach(item => {
+            // Подчёркивание и зачёркивание делаются BBCode-тегами [u] и [s].
+            if ("isBbcodeEnabled" in item) item.isBbcodeEnabled = true;
+        });
+
+        function renderQuestions() {
+            const open = dialogTab === "questions";
+            questionItems.forEach((item, i) => {
+                const exists = i < questions.length;
+                item.isVisible = open && exists;
+                if (!exists) return;
+                if (questionsAsked[i]) {
+                    item.colorRgb = [0.5, 0.5, 0.5];
+                    item.text = `[s]${questions[i]}[/s]`;
+                } else {
+                    item.colorRgb = [1, 1, 1];
+                    item.text = hoveredQuestion === i ? `[u]${questions[i]}[/u]` : questions[i];
+                }
+            });
+        }
+
+        function questionAt(clientX, clientY) {
+            if (dialogTab !== "questions") return -1;
+            return questionItems.findIndex((item, i) =>
+                i < questions.length && isPointerOver(item, clientX, clientY));
+        }
+
+        function askQuestion(i) {
+            if (i < 0 || questionsAsked[i]) return;
+            questionsAsked[i] = true;
+            renderQuestions();
+            // Точка интеграции: здесь позже появится ответ собеседника.
+            try { globalThis.sideEcho?.onQuestionAsked?.(i, questions[i]); }
+            catch (e) { console.error("onQuestionAsked", e); }
+        }
+
+        // Для нового звонка: все вопросы снова доступны.
+        function resetQuestions() {
+            questionsAsked.fill(false);
+            hoveredQuestion = -1;
+            renderQuestions();
+        }
+
+        // Следующий звонок: номер растёт, вопросы и чек-лист начинаются заново,
+        // окно возвращается на вкладку рации, результаты приборов сбрасываются.
+        // Контрольная точка сохраняется (reason "new-call", без уведомления).
+        function startNextCall() {
+            callNumber += 1;
+            resetQuestions();
+            listMarks.fill(0);
+            renderListChecks();
+            currentDevice = null;
+            dialogTab = "radio";
+            hoveredQuestion = -1;
+            renderDialog();
+            return saveCheckpoint("new-call");
         }
         function showDeviceTab() { dialogTab = "devices"; renderDialog(); }
         function showDevice(index) { currentDevice = index; showDeviceTab(); }
@@ -676,7 +763,7 @@ runOnStartup(runtime => {
         const gameDomButtons = [
             ...energyButtons, getOne("changeFrameButton"), coffeeButton, shopButton,
             shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton,
-            hintButton, settingsButton, endTempButton
+            hintButton, settingsButton, endTempButton, ...radioButtons
         ].filter(Boolean);
         const savedDomVisibility = new Map();
         let overlay = null; // null | "hint" | "end"
@@ -738,6 +825,31 @@ runOnStartup(runtime => {
             openHint();
         });
         if (hintCloseButton) hintCloseButton.addEventListener("click", () => { playClick(); closeHint(); });
+
+        // Кнопки рации. «Задать вопрос» открывает/закрывает список вопросов.
+        // «Передать координаты» и «Отклонить» завершают звонок и начинают
+        // следующий. Чтобы учесть решение игрока, подпишитесь:
+        // globalThis.sideEcho.onDecision = (kind, callNumber) => {...}
+        // (kind: "transfer" | "decline"; вызывается ДО начала следующего звонка).
+        const radioClickAllowed = () =>
+            runtime.globalVars.isTransitioning !== 1 && runtime.globalVars.shopOpen !== 1 && !overlay;
+        if (askButton) askButton.addEventListener("click", () => {
+            if (!radioClickAllowed()) return;
+            playClick();
+            dialogTab = dialogTab === "questions" ? "radio" : "questions";
+            hoveredQuestion = -1;
+            renderDialog();
+        });
+        for (const [button, kind] of [[transferButton, "transfer"], [declineButton, "decline"]]) {
+            if (!button) continue;
+            button.addEventListener("click", () => {
+                if (!radioClickAllowed()) return;
+                playClick();
+                try { globalThis.sideEcho?.onDecision?.(kind, callNumber); }
+                catch (e) { console.error("onDecision", e); }
+                startNextCall();
+            });
+        }
 
         // «Настройки»: сначала сохраняем игру, и только после успешной записи
         // уходим в главное меню. Если сохранить не удалось, остаёмся в игре
@@ -879,10 +991,9 @@ runOnStartup(runtime => {
                 // Проверка энергии
                 if (varManager.instVars.Energy <= 0) {
                     if (dialogText) {
-                        dialogText.text = "Недостаточно энергии.";
                         dialogTab = "devices";
-                        if (dialogTabDevices) dialogTabDevices.animationFrame = 1;
-                        if (dialogTabRadio) dialogTabRadio.animationFrame = 0;
+                        renderDialog();
+                        dialogText.text = "Недостаточно энергии.";
                     }
                     return;
                 }
@@ -899,30 +1010,40 @@ runOnStartup(runtime => {
         const listButton = getOne("listButton");
         const listPanel = getOne("listPanel");
         const listCloseButton = getOne("listCloseButton");
-        const listItems = [getOne("listItem1"), getOne("listItem2"), getOne("listItem3")].filter(Boolean);
+        // Чек-лист: 5 строк текста и две колонки клеток — «галочка» и «крестик».
+        const listRowTexts = getAll("listRowText").sort((a, b) => a.y - b.y);
+        const listCheckCells = getAll("listCheckCell").sort((a, b) => a.y - b.y);
+        const listCrossCells = getAll("listCrossCell").sort((a, b) => a.y - b.y);
+        const listParts = [...listRowTexts, ...listCheckCells, ...listCrossCells];
+        const setListParts = (visible) => listParts.forEach(p => { p.isVisible = visible; });
+        // Тексты пунктов лежат в tik.json -> checklist.
+        const checklistTexts = Array.isArray(config.checklist) && config.checklist.length
+            ? config.checklist
+            : ["Есть в списке ожидаемых?", "Совпадают ли данные (частота, груз, маршрут)?",
+               "Совпадает ли погода?", "Совпадает ли фоновый шум?", "Однотипен ли голос?"];
+        listRowTexts.forEach((t, i) => { t.text = checklistTexts[i] ?? ""; });
 
         if (listPanel) listPanel.isVisible = false;
         if (listCloseButton) listCloseButton.isVisible = false;
-        // Пункты чек-листа не являются циклическими анимациями.
-        // Останавливаем их, иначе движок сам дойдёт до кадра с крестиком.
-        const listChecks = listItems.map((item, i) => {
-            const legacy = restoredSave?.listChecks?.[i];
-            const current = restoredSave?.checklist?.[CHECK_NAMES[i]];
-            return current?.checked === true || current?.checked === 1 ||
-                (current == null && (legacy === 1 || legacy === true));
+        // Отметки по строкам: 0 — нет, 1 — галочка (подтверждено), 2 — крестик (опровергнуто).
+        const listMarks = listRowTexts.map((_, i) => {
+            const saved = restoredSave?.listMarks?.[i];
+            return saved === 1 || saved === 2 ? saved : 0;
         });
         function renderListChecks() {
-            listItems.forEach((item, i) => {
-                // 0 — пустой бокс, 1 — бокс с крестиком.
-                // Отключаем автоматическую смену кадров также на уровне спрайта.
-                item.animationSpeed = 0;
-                item.stopAnimation();
-                const target = listChecks[i] ? 1 : 0;
-                if (item.animationFrame !== target) item.animationFrame = target;
+            // Клетки не должны сами листать кадры: 0 — пустая, 1 — отмеченная.
+            const setFrame = (cell, target) => {
+                cell.animationSpeed = 0;
+                cell.stopAnimation();
+                if (cell.animationFrame !== target) cell.animationFrame = target;
+            };
+            listMarks.forEach((mark, i) => {
+                if (listCheckCells[i]) setFrame(listCheckCells[i], mark === 1 ? 1 : 0);
+                if (listCrossCells[i]) setFrame(listCrossCells[i], mark === 2 ? 1 : 0);
             });
         }
         renderListChecks();
-        listItems.forEach(item => { item.isVisible = false; });
+        setListParts(false);
 
         // Счётчик отличает даже две быстрые покупки с одинаковым savedAt.
         // Старые сохранения без revision остаются совместимыми.
@@ -941,11 +1062,10 @@ runOnStartup(runtime => {
                 variables,
                 roomSelect: runtime.globalVars.roomSelect === 1 ? 1 : 0,
                 coffeeInStock,
-                dialog: { tab: dialogTab, device: currentDevice },
-                checklist: Object.fromEntries(CHECK_NAMES.map((name, i) => [name, {
-                    checked: !!listChecks[i], animationFrame: listChecks[i] ? 1 : 0
-                }])),
-                listChecks: listChecks.map(checked => checked ? 1 : 0)
+                dialog: { tab: dialogTab === "questions" ? "radio" : dialogTab, device: currentDevice },
+                questionsAsked: questionsAsked.map(Boolean),
+                callNumber,
+                listMarks: listMarks.slice()
             };
         }
 
@@ -982,9 +1102,9 @@ runOnStartup(runtime => {
                 });
         }
 
-        // Точка интеграции для будущей системы звонков:
-        // вызывать sideEcho.onNewCall() ТОЛЬКО когда новый звонок уже появился
-        // и его состояние обновлено в соответствующей системе.
+        // Новый звонок начинается кнопками «Передать координаты» / «Отклонить»
+        // или вызовом sideEcho.onNewCall() из других систем: оба пути ведут в
+        // startNextCall(), который и сохраняет контрольную точку.
         // Открытие вкладки радио само по себе сохранение НЕ вызывает.
 
         function isPointerOver(instance, clientX, clientY) {
@@ -1008,31 +1128,56 @@ runOnStartup(runtime => {
                 listPanel.isVisible = expanded;
                 if (listCloseButton) listCloseButton.isVisible = expanded;
                 renderListChecks();
-                listItems.forEach(item => { item.isVisible = expanded; });
+                setListParts(expanded);
                 return;
             }
 
-            if (!listPanel.isVisible) {
-                if (isPointerOver(dialogTabRadio, e.clientX, e.clientY)) { dialogTab = "radio"; renderDialog(); }
-                else if (isPointerOver(dialogTabDevices, e.clientX, e.clientY)) { dialogTab = "devices"; renderDialog(); }
+            // Окно диалога: вкладки и список вопросов (чек-лист его не перекрывает).
+            if (isPointerOver(dialogTabRadio, e.clientX, e.clientY)) {
+                if (dialogTab !== "radio") { dialogTab = "radio"; hoveredQuestion = -1; renderDialog(); }
                 return;
             }
+            if (isPointerOver(dialogTabDevices, e.clientX, e.clientY)) {
+                if (dialogTab !== "devices") { dialogTab = "devices"; hoveredQuestion = -1; renderDialog(); }
+                return;
+            }
+            const clickedQuestion = questionAt(e.clientX, e.clientY);
+            if (clickedQuestion >= 0) { askQuestion(clickedQuestion); return; }
+
+            if (!listPanel.isVisible) return;
 
             if (isPointerOver(listCloseButton, e.clientX, e.clientY)) {
                 listPanel.isVisible = false;
                 if (listCloseButton) listCloseButton.isVisible = false;
-                listItems.forEach(item => { item.isVisible = false; });
+                setListParts(false);
                 return;
             }
 
-            for (let i = 0; i < listItems.length; i++) {
-                const item = listItems[i];
-                if (!isPointerOver(item, e.clientX, e.clientY)) continue;
-                listChecks[i] = !listChecks[i];
-                renderListChecks();
-                break;
+            // Клик по клетке: колонка «галочка» ставит 1, колонка «крестик» — 2;
+            // повторный клик по той же клетке снимает отметку.
+            for (let i = 0; i < listMarks.length; i++) {
+                if (isPointerOver(listCheckCells[i], e.clientX, e.clientY)) {
+                    listMarks[i] = listMarks[i] === 1 ? 0 : 1;
+                    renderListChecks();
+                    break;
+                }
+                if (isPointerOver(listCrossCells[i], e.clientX, e.clientY)) {
+                    listMarks[i] = listMarks[i] === 2 ? 0 : 2;
+                    renderListChecks();
+                    break;
+                }
             }
         });
+        // Наведение на вопрос: незаданный вопрос подчёркивается.
+        onRuntime("pointermove", (e) => {
+            if (dialogTab !== "questions" || overlay || runtime.globalVars.shopOpen === 1) return;
+            const idx = questionAt(e.clientX, e.clientY);
+            const hovered = idx >= 0 && !questionsAsked[idx] ? idx : -1;
+            if (hovered === hoveredQuestion) return;
+            hoveredQuestion = hovered;
+            renderQuestions();
+        });
+
         // ------------------------------------------------------------
         // Инициализация
         // ------------------------------------------------------------
@@ -1048,7 +1193,13 @@ runOnStartup(runtime => {
             openShop, closeShop, openHint, closeHint, openEndScreen,
             // Статистика для конечного экрана: addStat("CouriersArrived") и т.д.
             addStat: (name, amt = 1) => { if (name in varManager.instVars) varManager.instVars[name] += amt; },
-            onNewCall: () => saveCheckpoint("new-call"),
+            onNewCall: startNextCall,
+            getCallNumber: () => callNumber,
+            // Вопросы к собеседнику: списки и сброс для нового звонка.
+            questions: { list: questions, asked: questionsAsked, reset: resetQuestions },
+            // Подписки: onQuestionAsked(index, text), onDecision("transfer"|"decline").
+            onQuestionAsked: null,
+            onDecision: null,
         };
 
         cleanup = () => {

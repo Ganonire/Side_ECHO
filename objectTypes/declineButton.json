@@ -1,0 +1,9 @@
+{
+	"name": "declineButton",
+	"plugin-id": "Button",
+	"sid": 398104073535311,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
+}
