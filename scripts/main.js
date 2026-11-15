@@ -1,17 +1,15 @@
 // ================================================================
-// SIDE ECHO — main.js (сохранения в My Games)
-// Главное меню, контрольные сохранения и игровой UI.
-// Энергия: Максимум 10, кофе +3, третья кнопка -2, при 0 — конец игры.
-// Магазин: принудительно 1 раз после подсказки, перекрывает весь UI.
-// Кнопка смены комнаты: слева -950, справа 865, поднята выше.
+// SIDE ECHO — main.js (лимит 10 звонков)
 // ================================================================
 
 runOnStartup(runtime => {
     const LEGACY_SAVE_KEY = "side-echo-checkpoint-v1";
     const SAVE_KEY = "side-echo-checkpoint-json-v2";
     const SAVE_FILENAME = "savegame.json";
-    const SAVE_FOLDER = "My Games/Side ECHO";
+    
+    const SAVE_FOLDER = "SideECHO_Saves"; 
     const SAVE_PATH = `${SAVE_FOLDER}/${SAVE_FILENAME}`;
+    
     const DOCUMENTS_TAG = "<documents>";
     const PREVIEW_PICKER_TAG = "side-echo-documents";
     const HANDLE_DB = "side-echo-documents-permission-v2";
@@ -57,7 +55,6 @@ runOnStartup(runtime => {
             configPromise = runtime.assets.getProjectFileUrl("tik.json")
                 .then(url => fetch(url)).then(response => response.json())
                 .catch(e => {
-                    console.warn("Файл tik.json не загружен, используются значения по умолчанию", e);
                     return {settings: {room1X: 935, room2X: 2905, fadeDuration: 0.3}};
                 });
         }
@@ -71,14 +68,10 @@ runOnStartup(runtime => {
 
     const fsPlugin = runtime.objects.FileSystem;
     function hasDesktopDocuments() {
-        return !!fsPlugin?.desktopFeaturesSupported &&
-            typeof fsPlugin.hasPickerTag === "function" &&
-            fsPlugin.hasPickerTag(DOCUMENTS_TAG);
+        return !!fsPlugin?.desktopFeaturesSupported && typeof fsPlugin.hasPickerTag === "function" && fsPlugin.hasPickerTag(DOCUMENTS_TAG);
     }
     function hasPluginPreviewDocuments() {
-        return !!fsPlugin?.isSupported &&
-            typeof fsPlugin.showFolderPicker === "function" &&
-            typeof fsPlugin.hasPickerTag === "function";
+        return !!fsPlugin?.isSupported && typeof fsPlugin.showFolderPicker === "function" && typeof fsPlugin.hasPickerTag === "function";
     }
     function getNativeSaveTag() {
         if (hasDesktopDocuments()) return DOCUMENTS_TAG;
@@ -86,10 +79,7 @@ runOnStartup(runtime => {
         return null;
     }
     function supportsPreviewDocuments() {
-        return hasPluginPreviewDocuments() ||
-            (!runtime.isInWorker && typeof window !== "undefined" &&
-             typeof window.showDirectoryPicker === "function" &&
-             typeof indexedDB !== "undefined");
+        return hasPluginPreviewDocuments() || (!runtime.isInWorker && typeof window !== "undefined" && typeof window.showDirectoryPicker === "function" && typeof indexedDB !== "undefined");
     }
 
     function openHandleDatabase() {
@@ -106,8 +96,7 @@ runOnStartup(runtime => {
         const db = await openHandleDatabase();
         try {
             return await new Promise((resolve, reject) => {
-                const request = db.transaction(HANDLE_STORE, "readonly")
-                    .objectStore(HANDLE_STORE).get(HANDLE_ID);
+                const request = db.transaction(HANDLE_STORE, "readonly").objectStore(HANDLE_STORE).get(HANDLE_ID);
                 request.onsuccess = () => resolve(request.result ?? null);
                 request.onerror = () => reject(request.error);
             });
@@ -133,51 +122,35 @@ runOnStartup(runtime => {
         try {
             if (typeof projectRootHandle.queryPermission !== "function") return true;
             return (await projectRootHandle.queryPermission({mode})) === "granted";
-        } catch (e) { console.warn("Доступ к Документам не проверен", e); return false; }
+        } catch (e) { return false; }
     }
 
     function requestDocumentsFromClick({forcePicker = false} = {}) {
         if (hasDesktopDocuments()) return Promise.resolve(true);
         if (hasPluginPreviewDocuments()) {
-            if (!forcePicker && fsPlugin.hasPickerTag(PREVIEW_PICKER_TAG)) {
-                return Promise.resolve(true);
-            }
+            if (!forcePicker && fsPlugin.hasPickerTag(PREVIEW_PICKER_TAG)) return Promise.resolve(true);
             try {
-                return fsPlugin.showFolderPicker({
-                    pickerTag: PREVIEW_PICKER_TAG,
-                    mode: "readwrite",
-                    id: "side-echo-documents",
-                    startIn: "documents"
-                }).then(() => {
-                    saveFolderProblem = "";
-                    return true;
-                });
+                return fsPlugin.showFolderPicker({ pickerTag: PREVIEW_PICKER_TAG, mode: "readwrite", id: "side-echo-documents", startIn: "documents" })
+                .then(() => { saveFolderProblem = ""; return true; });
             } catch (e) { return Promise.reject(e); }
         }
-        if (!supportsPreviewDocuments()) {
-            return Promise.reject(new Error("Нет доступа к папке Документы в текущем режиме запуска"));
-        }
+        if (!supportsPreviewDocuments()) return Promise.reject(new Error("Нет доступа к папке"));
         let requested;
         try {
-            if (!forcePicker && projectRootHandle &&
-                typeof projectRootHandle.requestPermission === "function") {
-                requested = projectRootHandle.requestPermission({mode: "readwrite"})
-                    .then(state => {
-                        if (state !== "granted") throw new Error("Доступ к Документам не разрешён");
-                        return projectRootHandle;
-                    });
+            if (!forcePicker && projectRootHandle && typeof projectRootHandle.requestPermission === "function") {
+                requested = projectRootHandle.requestPermission({mode: "readwrite"}).then(state => {
+                    if (state !== "granted") throw new Error("Доступ не разрешён");
+                    return projectRootHandle;
+                });
             } else if (!forcePicker && projectRootHandle) {
                 requested = Promise.resolve(projectRootHandle);
             } else {
-                requested = window.showDirectoryPicker({
-                    id: "side-echo-documents", startIn: "documents", mode: "readwrite"
-                });
+                requested = window.showDirectoryPicker({ id: "side-echo-documents", startIn: "documents", mode: "readwrite" });
             }
         } catch (e) { return Promise.reject(e); }
         return requested.then(async handle => {
             projectRootHandle = handle;
-            try { await rememberDocuments(handle); }
-            catch (e) { console.warn("Папка Документы не запомнена между запусками", e); }
+            try { await rememberDocuments(handle); } catch (e) { }
             saveFolderProblem = "";
             return handle;
         });
@@ -185,17 +158,10 @@ runOnStartup(runtime => {
 
     async function getPreviewSaveHandle(create = false) {
         if (!projectRootHandle) return null;
-        if (!await hasDocumentsPermission(create ? "readwrite" : "read")) {
-            throw new Error("Разреши доступ к папке Документы через Настройки");
-        }
+        if (!await hasDocumentsPermission(create ? "readwrite" : "read")) throw new Error("Разреши доступ к папке");
         let folder = projectRootHandle;
-        for (const component of ["My Games", "Side ECHO"]) {
-            try { folder = await folder.getDirectoryHandle(component, {create}); }
-            catch (e) {
-                if (!create && e?.name === "NotFoundError") return null;
-                throw e;
-            }
-        }
+        try { folder = await folder.getDirectoryHandle(SAVE_FOLDER, {create}); }
+        catch (e) { if (!create && e?.name === "NotFoundError") return null; throw e; }
         try { return await folder.getFileHandle(SAVE_FILENAME, {create}); }
         catch (e) { if (!create && e?.name === "NotFoundError") return null; throw e; }
     }
@@ -204,38 +170,24 @@ runOnStartup(runtime => {
         if (!raw) return null;
         try {
             const data = typeof raw === "string" ? JSON.parse(raw) : raw;
-            return (data?.version === 1 || data?.version === 2) &&
-                   data?.variables && typeof data.variables.Energy === "number" &&
-                   typeof data.variables.Credits === "number" ? data : null;
-        } catch (e) {
-            console.warn("Некорректный JSON сохранения SIDE ECHO", e);
-            return null;
-        }
+            return (data?.version === 1 || data?.version === 2) && data?.variables && typeof data.variables.Energy === "number" ? data : null;
+        } catch (e) { return null; }
     }
 
     function isMissingFileError(e) {
-        return e?.name === "NotFoundError" || e?.code === "ENOENT" ||
-            /not found|no such file|не найден|cannot find the (?:path|file)|не удается найти указанный путь/i.test(e?.message || "");
+        return e?.name === "NotFoundError" || e?.code === "ENOENT" || /not found|no such file|не найден|cannot find the (?:path|file)/i.test(e?.message || "");
     }
 
     async function getNativeSaveFolderState(pickerTag) {
         const root = await fsPlugin.listContent(pickerTag, "", false);
-        if (!root.folders.includes("My Games")) return {folderExists: false, fileExists: false};
-        const myGames = await fsPlugin.listContent(pickerTag, "My Games", false);
-        if (!myGames.folders.includes("Side ECHO")) return {folderExists: false, fileExists: false};
+        if (!root.folders.includes(SAVE_FOLDER)) return {folderExists: false, fileExists: false};
         const gameFolder = await fsPlugin.listContent(pickerTag, SAVE_FOLDER, false);
         return {folderExists: true, fileExists: gameFolder.files.includes(SAVE_FILENAME)};
     }
 
     async function ensureNativeSaveFolder(pickerTag) {
         const root = await fsPlugin.listContent(pickerTag, "", false);
-        if (!root.folders.includes("My Games")) {
-            await fsPlugin.createFolder(pickerTag, "My Games");
-        }
-        const myGames = await fsPlugin.listContent(pickerTag, "My Games", false);
-        if (!myGames.folders.includes("Side ECHO")) {
-            await fsPlugin.createFolder(pickerTag, SAVE_FOLDER);
-        }
+        if (!root.folders.includes(SAVE_FOLDER)) await fsPlugin.createFolder(pickerTag, SAVE_FOLDER);
     }
 
     async function readCheckpoint() {
@@ -244,27 +196,19 @@ runOnStartup(runtime => {
             const nativeTag = getNativeSaveTag();
             if (nativeTag) {
                 const state = await getNativeSaveFolderState(nativeTag);
-                if (!state.fileExists) {
-                    saveFolderProblem = "";
-                    return null;
-                }
-                content = await fsPlugin.readFile({
-                    pickerTag: nativeTag, folderPath: SAVE_PATH, mode: "text"
-                });
+                if (!state.fileExists) return null;
+                content = await fsPlugin.readFile({ pickerTag: nativeTag, folderPath: SAVE_PATH, mode: "text" });
             } else {
                 const handle = await getPreviewSaveHandle(false);
                 if (!handle) return null;
                 content = await (await handle.getFile()).text();
             }
             const parsed = parseSave(content);
-            if (!parsed) throw new Error("Файл сохранения повреждён или имеет неверный формат");
+            if (!parsed) throw new Error("Файл повреждён");
             saveFolderProblem = "";
             return parsed;
         } catch (e) {
-            if (!isMissingFileError(e)) {
-                saveFolderProblem = e.message || String(e);
-                console.warn("Не удалось прочитать My Games/Side ECHO/savegame.json", e);
-            } else saveFolderProblem = "";
+            if (!isMissingFileError(e)) saveFolderProblem = e.message || String(e);
             return null;
         }
     }
@@ -274,25 +218,17 @@ runOnStartup(runtime => {
         const nativeTag = getNativeSaveTag();
         if (nativeTag) {
             await ensureNativeSaveFolder(nativeTag);
-            await fsPlugin.writeFile({
-                pickerTag: nativeTag,
-                folderPath: SAVE_PATH,
-                mode: "overwrite",
-                data: contents
-            });
+            await fsPlugin.writeFile({ pickerTag: nativeTag, folderPath: SAVE_PATH, mode: "overwrite", data: contents });
         } else {
             const handle = await getPreviewSaveHandle(true);
-            if (!handle) throw new Error("Разреши доступ к папке Документы через Настройки");
+            if (!handle) throw new Error("Разреши доступ к папке");
             const writer = await handle.createWritable({keepExistingData: false});
             try { await writer.write(contents); await writer.close(); }
             catch (e) { try { await writer.abort(); } catch (_) {} throw e; }
         }
         const savedOnDisk = await readCheckpoint();
-        if (!savedOnDisk || JSON.stringify(savedOnDisk) !== JSON.stringify(data)) {
-            throw new Error("После записи файл savegame.json не содержит новые данные");
-        }
-        try { await runtime.storage.setItem(SAVE_KEY, contents); }
-        catch (e) { console.warn("Резервная копия недоступна (JSON сохранён)", e); }
+        if (!savedOnDisk) throw new Error("Файл не сохранился");
+        try { await runtime.storage.setItem(SAVE_KEY, contents); } catch (e) { }
     }
 
     async function deleteCheckpoint() {
@@ -303,13 +239,9 @@ runOnStartup(runtime => {
         } else {
             const handle = await getPreviewSaveHandle(false);
             if (handle) {
-                if (!await hasDocumentsPermission("readwrite")) {
-                    throw new Error("Нет разрешения на удаление старого сохранения");
-                }
-                const folder = await projectRootHandle.getDirectoryHandle("My Games");
-                const gameFolder = await folder.getDirectoryHandle("Side ECHO");
-                try { await gameFolder.removeEntry(SAVE_FILENAME); }
-                catch (e) { if (!isMissingFileError(e)) throw e; }
+                if (!await hasDocumentsPermission("readwrite")) throw new Error("Нет прав");
+                const folder = await projectRootHandle.getDirectoryHandle(SAVE_FOLDER);
+                try { await folder.removeEntry(SAVE_FILENAME); } catch (e) { if (!isMissingFileError(e)) throw e; }
             }
         }
         await runtime.storage.removeItem(SAVE_KEY);
@@ -339,37 +271,32 @@ runOnStartup(runtime => {
         async function updateFolderInfo() {
             if (!infoText) return;
             if (hasDesktopDocuments()) {
-                infoText.text = "СОХРАНЕНИЯ:\nДокументы\\My Games\\Side ECHO\\savegame.json\nАвтосохранение при покупке и новом звонке.";
+                infoText.text = `СОХРАНЕНИЯ:\nДокументы\\${SAVE_FOLDER}\\${SAVE_FILENAME}`;
                 if (folderButton) { folderButton.isEnabled = false; folderButton.isVisible = false; }
             } else if (!supportsPreviewDocuments()) {
-                infoText.text = "Недоступна запись в Документы.\nДля автоматических сохранений нужна Windows-версия игры.";
+                infoText.text = "Недоступна запись.";
                 if (folderButton) { folderButton.isEnabled = false; }
             } else if (getNativeSaveTag() === PREVIEW_PICKER_TAG || await hasDocumentsPermission()) {
-                infoText.text = "ПАПКА ДОКУМЕНТЫ ПОДКЛЮЧЕНА\nMy Games\\Side ECHO\\savegame.json\nПуть запомнен для следующих запусков.";
-                if (folderButton) { folderButton.isEnabled = true; }
-            } else if (projectRootHandle) {
-                infoText.text = "В Preview требуется повторно разрешить доступ к Документам.\nПуть выбирать заново не нужно.";
+                infoText.text = `ПАПКА ПОДКЛЮЧЕНА\n${SAVE_FOLDER}\\${SAVE_FILENAME}`;
                 if (folderButton) { folderButton.isEnabled = true; }
             } else {
-                infoText.text = "В Preview один раз выбери папку «Документы».\nВ ней игра создаст My Games\\Side ECHO\\savegame.json.";
+                infoText.text = "В Preview один раз выбери папку для сохранений.";
                 if (folderButton) { folderButton.isEnabled = true; }
             }
             if (saveFolderProblem) infoText.text += `\n${saveFolderProblem}`;
         }
         async function refreshCheckpoint() {
-            try { checkpoint = await readCheckpoint(); }
-            catch (e) { console.warn("Не удалось прочитать сохранение", e); checkpoint = null; }
+            try { checkpoint = await readCheckpoint(); } catch (e) { checkpoint = null; }
             continueButton.isEnabled = !!checkpoint;
             await updateFolderInfo();
         }
 
         await queuedStorage.catch(() => {});
-        if (!hasDesktopDocuments() && !hasPluginPreviewDocuments() &&
-            typeof indexedDB !== "undefined") {
-            try { projectRootHandle = await getRememberedDocuments(); }
-            catch (e) { console.warn("Не удалось восстановить доступ к Документам", e); }
+        if (!hasDesktopDocuments() && !hasPluginPreviewDocuments() && typeof indexedDB !== "undefined") {
+            try { projectRootHandle = await getRememberedDocuments(); } catch (e) { }
         }
         await refreshCheckpoint();
+        
         settingsButton?.addEventListener("click", () => {
             settingsUI.open();
             if (hasDesktopDocuments() && folderButton) folderButton.isVisible = false;
@@ -378,51 +305,29 @@ runOnStartup(runtime => {
         folderButton?.addEventListener("click", () => {
             if (hasDesktopDocuments()) return;
             const request = requestDocumentsFromClick({forcePicker: !projectRootHandle});
-            void request.then(async () => {
-                saveFolderProblem = "";
-                await refreshCheckpoint();
-            }).catch(async e => {
-                if (e?.name !== "AbortError") saveFolderProblem = e.message || String(e);
-                await updateFolderInfo();
-            });
+            void request.then(async () => { saveFolderProblem = ""; await refreshCheckpoint(); })
+                .catch(async e => { saveFolderProblem = e.message || String(e); await updateFolderInfo(); });
         });
         const menuEscape = e => { if (e.key === "Escape") settingsUI.close(); };
         runtime.addEventListener("keydown", menuEscape);
         cleanup = () => runtime.removeEventListener("keydown", menuEscape);
 
         newButton?.addEventListener("click", () => {
-            if (opening) return;
-            opening = true;
-            newButton.isEnabled = false;
-            continueButton.isEnabled = false;
-            newGameSaveWarning = "";
+            if (opening) return; opening = true;
+            newButton.isEnabled = false; continueButton.isEnabled = false; newGameSaveWarning = "";
             const request = requestDocumentsFromClick();
             void request.then(() => storageOperation(deleteCheckpoint))
-                .catch(e => {
-                    console.warn("Новая игра: старое сохранение не удалено", e);
-                    newGameSaveWarning = "НЕ УДАЛОСЬ ОЧИСТИТЬ СОХРАНЕНИЕ";
-                })
-                .then(() => {
-                    loadForNextGame = null;
-                    runtime.goToLayout(GAME_LAYOUT);
-                });
+                .catch(e => { newGameSaveWarning = "НЕ УДАЛОСЬ ОЧИСТИТЬ СОХРАНЕНИЕ"; })
+                .then(() => { loadForNextGame = null; runtime.goToLayout(GAME_LAYOUT); });
         });
 
         continueButton?.addEventListener("click", () => {
-            if (opening || !continueButton.isEnabled) return;
-            opening = true;
-            newButton.isEnabled = false;
-            continueButton.isEnabled = false;
+            if (opening || !continueButton.isEnabled) return; opening = true;
+            newButton.isEnabled = false; continueButton.isEnabled = false;
             void storageOperation(readCheckpoint).then(saved => {
-                if (!saved) throw new Error("Файл сохранения отсутствует или повреждён");
-                loadForNextGame = saved;
-                runtime.goToLayout(GAME_LAYOUT);
-            }).catch(async e => {
-                saveFolderProblem = e?.message || String(e);
-                opening = false;
-                newButton.isEnabled = true;
-                await refreshCheckpoint();
-            });
+                if (!saved) throw new Error("Файл отсутствует");
+                loadForNextGame = saved; runtime.goToLayout(GAME_LAYOUT);
+            }).catch(async e => { saveFolderProblem = e?.message || String(e); opening = false; newButton.isEnabled = true; await refreshCheckpoint(); });
         });
     }
 
@@ -433,10 +338,7 @@ runOnStartup(runtime => {
 
     runtime.addEventListener("beforeanylayoutstart", async ({layout}) => {
         if (layout.name !== MENU_LAYOUT && layout.name !== GAME_LAYOUT) return;
-        if (layout.name === MENU_LAYOUT) {
-            await initStartMenu();
-            return;
-        }
+        if (layout.name === MENU_LAYOUT) { await initStartMenu(); return; }
         const restoredSave = loadForNextGame;
         loadForNextGame = null;
         const runtimeListeners = [];
@@ -449,8 +351,8 @@ runOnStartup(runtime => {
         const getAll = (name) => runtime.objects[name]?.getAllInstances() ?? [];
 
         const config = await loadGameConfig();
-
         const varManager = runtime.objects.varManager.getFirstInstance();
+        
         if (restoredSave) {
             for (const name of VAR_NAMES) {
                 if (Object.hasOwn(restoredSave.variables, name)) {
@@ -465,17 +367,14 @@ runOnStartup(runtime => {
         const energyText = getOne("energyText");
         const energyBar = getOne("energyBar");
         const energyBarBG = getOne("energyBarBg");
-        
-        const energyButtons = [
-            getOne("energyButton"), 
-            getOne("energyButton2"), 
-            getOne("energyButton3")
-        ].filter(Boolean);
-
+        const energyButtons = [getOne("energyButton"), getOne("energyButton2"), getOne("energyButton3")].filter(Boolean);
         const coffeeButton = getOne("coffeeButton");
         const dialogText = getOne("dialogText");
+        
         const dialogTabRadio = getOne("dialogTabRadio");
         const dialogTabDevices = getOne("dialogTabDevices");
+        const dialogTabMail = getOne("dialogTabMail"); 
+
         const askButton = getOne("askButton");
         const transferButton = getOne("transferButton");
         const declineButton = getOne("declineButton");
@@ -495,10 +394,9 @@ runOnStartup(runtime => {
         const energySegments = getAll("energySegment").sort((a, b) => a.x - b.x);
         const changeFrameButton = getOne("changeFrameButton");
         const shopButton = getOne("shopButton");
+        
+        const catFace = getOne("catFace");
 
-        // ==========================================
-        // НАСТРОЙКИ ЭНЕРГИИ И ФЛАГИ СОСТОЯНИЯ
-        // ==========================================
         const MAX_ENERGY = 10;             
         const CURRENCY_LABEL = "ТАЛОНЫ";
         const COFFEE_PRICE = 3;
@@ -508,13 +406,18 @@ runOnStartup(runtime => {
         const energyCosts = [2, 1, 1];     
         
         let isGameOver = false; 
-        
         let isShopDisabled = restoredSave?.isShopDisabled === true;
         let isTutorialPhase = !restoredSave && !isShopDisabled; 
 
-        if (isShopDisabled && shopButton) {
-            shopButton.isVisible = false;
-        }
+        let catState = restoredSave?.catState !== undefined ? restoredSave.catState : 0; 
+        let catAngryTimer = restoredSave?.catAngryTimer || 0;
+        let isCatFed = restoredSave?.isCatFed || false;
+        let echoMistakes = restoredSave?.echoMistakes || 0;
+
+        const devicesUsed = restoredSave?.devicesUsed || [false, false, false];
+        const chatHistory = restoredSave?.chatHistory || [];
+
+        if (isShopDisabled && shopButton) shopButton.isVisible = false;
 
         let lastDisplayedEnergy = NaN;
         let lastDisplayedCredits = NaN;
@@ -540,7 +443,9 @@ runOnStartup(runtime => {
             }
 
             const isOutOfEnergy = energy <= 0;
-            energyButtons.forEach(btn => { btn.opacity = isOutOfEnergy ? 0.4 : 1.0; });
+            energyButtons.forEach((btn, idx) => { 
+                btn.opacity = (isOutOfEnergy || devicesUsed[idx]) ? 0.2 : 1.0; 
+            });
         }
 
         function updateCreditsUI() {
@@ -562,39 +467,53 @@ runOnStartup(runtime => {
             }
         }
 
+        function updateCatUI() {
+            if (!catFace) return;
+            catFace.animationFrame = catState;
+            catFace.isVisible = (catState > 0);
+            
+            const view = viewRect(catFace.layer);
+            catFace.x = runtime.layout.width - 100; 
+            catFace.y = runtime.layout.height - 100; 
+        }
+
         const CALL_TEMPLATE = config.texts?.radioCall ?? "Звонок Nº 1";
-        let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1
-            ? restoredSave.callNumber : 1;
+        let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1 ? restoredSave.callNumber : 1;
         const callText = () => CALL_TEMPLATE.replace(/\d+\s*$/, String(callNumber));
-        let dialogTab = restoredSave?.dialog?.tab === "devices" ? "devices" : "radio";
-        let currentDevice = Number.isInteger(restoredSave?.dialog?.device)
-            ? restoredSave.dialog.device : null;
+        
+        let dialogTab = restoredSave?.dialog?.tab || "radio"; 
+        let currentDevice = Number.isInteger(restoredSave?.dialog?.device) ? restoredSave.dialog.device : null;
 
         function renderDialog() {
-            const radioMode = dialogTab !== "devices";
-            if (dialogTabRadio) dialogTabRadio.animationFrame = radioMode ? 1 : 0;
-            if (dialogTabDevices) dialogTabDevices.animationFrame = radioMode ? 0 : 1;
+            const radioMode = dialogTab === "radio" || dialogTab === "questions";
+            const deviceMode = dialogTab === "devices";
+            const mailMode = dialogTab === "mail";
+
+            if (dialogTabRadio) dialogTabRadio.animationFrame = dialogTab === "radio" ? 1 : 0;
+            if (dialogTabDevices) dialogTabDevices.animationFrame = deviceMode ? 1 : 0;
+            if (dialogTabMail) dialogTabMail.animationFrame = mailMode ? 1 : 0;
+            
             radioButtons.forEach(b => { b.isVisible = radioMode; });
             renderQuestions();
             if (!dialogText) return;
 
-            if (radioMode) dialogText.text = callText();
-            else dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
+            if (radioMode) {
+                dialogText.text = chatHistory.length > 0 ? chatHistory.join("\n") : callText();
+            } else if (mailMode) {
+                dialogText.text = "Входящих сообщений нет.\n\n(Здесь будет лор)";
+            } else {
+                dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
+            }
         }
 
         const questions = (Array.isArray(config.questions) && config.questions.length
             ? config.questions
-            : ["Назовите вашу кодовую фразу", // <-- НОВЫЙ ВОПРОС
-               "Какой груз вы доставляете?",
-               "Какие погодные условия в вашем районе?",
-               "В какой местности вы сейчас находитесь?"]
+            : ["Назовите вашу кодовую фразу", "Какой груз вы доставляете?", "Погодные условия?", "Местность?"]
         ).slice(0, questionItems.length);
         
         const questionsAsked = questions.map((_, i) => restoredSave?.questionsAsked?.[i] === true);
         let hoveredQuestion = -1;
-        questionItems.forEach(item => {
-            if ("isBbcodeEnabled" in item) item.isBbcodeEnabled = true;
-        });
+        questionItems.forEach(item => { if ("isBbcodeEnabled" in item) item.isBbcodeEnabled = true; });
 
         function renderQuestions() {
             const open = dialogTab === "questions";
@@ -614,16 +533,18 @@ runOnStartup(runtime => {
 
         function questionAt(clientX, clientY) {
             if (dialogTab !== "questions") return -1;
-            return questionItems.findIndex((item, i) =>
-                i < questions.length && isPointerOver(item, clientX, clientY));
+            return questionItems.findIndex((item, i) => i < questions.length && isPointerOver(item, clientX, clientY));
         }
 
         function askQuestion(i) {
             if (i < 0 || questionsAsked[i]) return;
             questionsAsked[i] = true;
+            
+            chatHistory.push(`> ${questions[i]}`);
             renderQuestions();
-            try { globalThis.sideEcho?.onQuestionAsked?.(i, questions[i]); }
-            catch (e) { console.error("onQuestionAsked", e); }
+            renderDialog();
+            
+            void saveCheckpoint("action");
         }
 
         function resetQuestions() {
@@ -632,7 +553,14 @@ runOnStartup(runtime => {
             renderQuestions();
         }
 
+        // ИЗМЕНЕННАЯ ФУНКЦИЯ: Добавлена проверка на 10-й звонок
         function startNextCall() {
+            if (callNumber >= 10) {
+                isGameOver = true;
+                openEndScreen(); // Вызываем экран итогов
+                return; // Прерываем функцию, 11-й звонок не начнется
+            }
+
             checklistHistory[String(callNumber)] = listMarks.slice();
             callNumber += 1;
             resetQuestions();
@@ -640,8 +568,19 @@ runOnStartup(runtime => {
             currentDevice = null;
             dialogTab = "radio";
             hoveredQuestion = -1;
+            
+            chatHistory.length = 0; 
+            chatHistory.push(`[Звонок ${callNumber}]`);
             renderDialog();
-            return saveCheckpoint("new-call");
+
+            echoMistakes = 0; 
+            if (isCatFed) {
+                isCatFed = false;
+                catState = 1; 
+                updateCatUI();
+            }
+            
+            void saveCheckpoint("new-call");
         }
         function showDeviceTab() { dialogTab = "devices"; renderDialog(); }
         function showDevice(index) { currentDevice = index; showDeviceTab(); }
@@ -656,8 +595,7 @@ runOnStartup(runtime => {
         const SHOP_PART_NAMES = ["shopPanel", "shopTitleText", "shopCreditsText", "shopMessageText", "shopCoffeeText", "shopCatFoodText", "shopCloseButton", "shopCoffeeBuyButton", "shopCatFoodBuyButton"];
         const shopParts = SHOP_PART_NAMES.flatMap(getAll);
         
-        let coffeeInStock = (typeof restoredSave?.inventory?.coffeeInStock === "boolean"
-            ? restoredSave.inventory.coffeeInStock : restoredSave?.coffeeInStock) === true;
+        let coffeeInStock = (typeof restoredSave?.inventory?.coffeeInStock === "boolean" ? restoredSave.inventory.coffeeInStock : restoredSave?.coffeeInStock) === true;
         let messageTimer = null;
 
         function showShopMessage(text) {
@@ -691,19 +629,13 @@ runOnStartup(runtime => {
         const endTitleText = getOne("endTitleText");
 
         const hintParts = ["hintPanel", "hintText", "hintCloseButton"].flatMap(getAll);
-        const endParts = ["endPanel", "endTitleText", "endArrivedText", "endLostText",
-                          "endZonesText", "endEchoText", "endEnergyText", "endMenuButton"].flatMap(getAll);
+        const endParts = ["endPanel", "endTitleText", "endArrivedText", "endLostText", "endZonesText", "endEchoText", "endEnergyText", "endMenuButton"].flatMap(getAll);
 
         const DESIGN_CX = 935;
         const DESIGN_CY = 540;
         const hudButtons = [hintButton, settingsButton, saveNoticeText].filter(Boolean);
-        
         const followParts = [...hudButtons, ...hintParts, ...endParts, ...shopParts];
-        
-        const followOffsets = new Map(
-            followParts.map(o => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }])
-        );
-        
+        const followOffsets = new Map(followParts.map(o => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }]));
         const fullscreenPanels = new Set([...getAll("hintPanel"), ...getAll("endPanel")]);
 
         function viewRect(layer) {
@@ -714,11 +646,7 @@ runOnStartup(runtime => {
                 const hw = 960, hh = 540;
                 const cx = cameraObj ? cameraObj.x : DESIGN_CX;
                 const cy = cameraObj ? cameraObj.y : DESIGN_CY;
-                return {
-                    cx: Math.min(Math.max(cx, hw), runtime.layout.width - hw),
-                    cy: Math.min(Math.max(cy, hh), runtime.layout.height - hh),
-                    w: 1920, h: 1080
-                };
+                return { cx: Math.min(Math.max(cx, hw), runtime.layout.width - hw), cy: Math.min(Math.max(cy, hh), runtime.layout.height - hh), w: 1920, h: 1080 };
             }
         }
 
@@ -728,36 +656,21 @@ runOnStartup(runtime => {
                 let view = cachedViews.get(p.layer);
                 if (!view) { view = viewRect(p.layer); cachedViews.set(p.layer, view); }
                 const off = followOffsets.get(p);
-                if (off) {
-                    p.x = view.cx + off.dx;
-                    p.y = view.cy + off.dy;
-                }
-                if (fullscreenPanels.has(p)) {
-                    p.width = view.w + 4;
-                    p.height = view.h + 4;
-                }
+                if (off) { p.x = view.cx + off.dx; p.y = view.cy + off.dy; }
+                if (fullscreenPanels.has(p)) { p.width = view.w + 4; p.height = view.h + 4; }
             });
         }
 
-        const uiToHideInShop = [
-            ...energyButtons, changeFrameButton, coffeeButton, shopButton,
-            hintButton, settingsButton, endTempButton, ...radioButtons
-        ].filter(Boolean);
-
+        const uiToHideInShop = [...energyButtons, changeFrameButton, coffeeButton, shopButton, hintButton, settingsButton, endTempButton, dialogTabRadio, dialogTabDevices, dialogTabMail, ...radioButtons].filter(Boolean);
         const savedDomVisibility = new Map();
         let overlay = null;
 
         function openShop() {
             if (runtime.globalVars.shopOpen === 1) return;
             runtime.globalVars.shopOpen = 1; 
-            
-            uiToHideInShop.forEach(b => { 
-                savedDomVisibility.set(b, b.isVisible); 
-                b.isVisible = false; 
-            });
-            
+            uiToHideInShop.forEach(b => { savedDomVisibility.set(b, b.isVisible); b.isVisible = false; });
+            if (catFace) catFace.isVisible = false; 
             centerPartsOnScreen(shopParts);
-            
             shopParts.forEach(p => { p.isVisible = true; });
             if (shopMessageText) shopMessageText.text = "";
             refreshShopTexts();
@@ -767,31 +680,24 @@ runOnStartup(runtime => {
             if (runtime.globalVars.shopOpen === 0) return;
             runtime.globalVars.shopOpen = 0; 
             shopParts.forEach(p => { p.isVisible = false; });
-            
-            uiToHideInShop.forEach(b => {
-                b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
-            });
-            
+            uiToHideInShop.forEach(b => { b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true; });
             if (coffeeButton) coffeeButton.isVisible = coffeeInStock;
+            if (catFace) catFace.isVisible = (catState > 0);
 
             if (!isShopDisabled) {
                 isShopDisabled = true;
                 if (shopButton) shopButton.isVisible = false;
-                console.log("Магазин закрыт. Больше он не появится.");
                 void saveCheckpoint("shop-closed"); 
             }
         }
 
-        const gameDomButtons = [
-            ...energyButtons, changeFrameButton, coffeeButton, shopButton,
-            shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton,
-            hintButton, settingsButton, endTempButton, ...radioButtons
-        ].filter(Boolean);
+        const gameDomButtons = [...energyButtons, changeFrameButton, coffeeButton, shopButton, shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton, hintButton, settingsButton, endTempButton, dialogTabRadio, dialogTabDevices, dialogTabMail, ...radioButtons].filter(Boolean);
 
         function openOverlay(kind, parts) {
             if (overlay || runtime.globalVars.isTransitioning === 1) return false;
             overlay = kind;
             gameDomButtons.forEach(b => { savedDomVisibility.set(b, b.isVisible); b.isVisible = false; });
+            if (catFace) catFace.isVisible = false;
             centerPartsOnScreen(parts);
             parts.forEach(p => { p.isVisible = true; });
             return true;
@@ -800,20 +706,15 @@ runOnStartup(runtime => {
         function closeOverlay(kind, parts) {
             if (overlay !== kind) return;
             parts.forEach(p => { p.isVisible = false; });
-            gameDomButtons.forEach(b => {
-                b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
-            });
+            gameDomButtons.forEach(b => { b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true; });
+            if (catFace) catFace.isVisible = (catState > 0);
             overlay = null;
         }
 
         const playClick = () => { try { runtime.callFunction("PlayClick"); } catch (e) { } };
-
-        function goToStartMenu() {
-            runtime.goToLayout(MENU_LAYOUT);
-        }
+        function goToStartMenu() { runtime.goToLayout(MENU_LAYOUT); }
 
         const openHint = () => openOverlay("hint", hintParts);
-        
         const closeHint = () => {
             closeOverlay("hint", hintParts);
             if (isTutorialPhase && !isShopDisabled) {
@@ -825,29 +726,26 @@ runOnStartup(runtime => {
         function openEndScreen() {
             if (!openOverlay("end", endParts)) return;
             if (endTitleText) endTitleText.text = endText.title;
-            endFields.forEach(f => {
-                if (f.obj) f.obj.text = `${f.label}: ${varManager.instVars[f.varName]}`;
-            });
+            endFields.forEach(f => { if (f.obj) f.obj.text = `${f.label}: ${varManager.instVars[f.varName]}`; });
         }
         const closeEndScreen = () => closeOverlay("end", endParts);
 
         hintParts.forEach(p => { p.isVisible = false; });
         endParts.forEach(p => { p.isVisible = false; });
         shopParts.forEach(p => { p.isVisible = false; });
+        if (catFace) catFace.isVisible = false;
 
         if (hintButton) hintButton.addEventListener("click", () => {
             if (overlay || runtime.globalVars.isTransitioning === 1) return;
-            playClick();
-            openHint();
+            playClick(); openHint();
         });
         if (hintCloseButton) hintCloseButton.addEventListener("click", () => { playClick(); closeHint(); });
 
-        const radioClickAllowed = () =>
-            runtime.globalVars.isTransitioning !== 1 && runtime.globalVars.shopOpen !== 1 && !overlay;
+        const radioClickAllowed = () => runtime.globalVars.isTransitioning !== 1 && runtime.globalVars.shopOpen !== 1 && !overlay;
         if (askButton) askButton.addEventListener("click", () => {
-            if (!radioClickAllowed()) return;
+            if (!radioClickAllowed() || dialogTab !== "radio") return;
             playClick();
-            dialogTab = dialogTab === "questions" ? "radio" : "questions";
+            dialogTab = "questions";
             hoveredQuestion = -1;
             renderDialog();
         });
@@ -856,8 +754,7 @@ runOnStartup(runtime => {
             button.addEventListener("click", () => {
                 if (!radioClickAllowed()) return;
                 playClick();
-                try { globalThis.sideEcho?.onDecision?.(kind, callNumber); }
-                catch (e) { console.error("onDecision", e); }
+                try { globalThis.sideEcho?.onDecision?.(kind, callNumber); } catch (e) { }
                 startNextCall();
             });
         }
@@ -865,27 +762,23 @@ runOnStartup(runtime => {
         let leavingToMenu = false;
         if (settingsButton) settingsButton.addEventListener("click", async () => {
             if (leavingToMenu || overlay || runtime.globalVars.isTransitioning === 1) return;
-            leavingToMenu = true;
-            settingsButton.isEnabled = false;
-            playClick();
-            const saved = await saveCheckpoint("settings");
-            if (saved) {
-                goToStartMenu();
-            } else {
-                leavingToMenu = false;
-                settingsButton.isEnabled = true;
+            leavingToMenu = true; settingsButton.isEnabled = false; playClick();
+            let saved = await saveCheckpoint("settings");
+            if (!saved) {
+                try {
+                    await requestDocumentsFromClick({ forcePicker: true });
+                    saved = await saveCheckpoint("settings"); 
+                } catch (e) { }
             }
+            if (saved) goToStartMenu();
+            else { leavingToMenu = false; settingsButton.isEnabled = true; }
         });
 
         if (endTempButton) endTempButton.addEventListener("click", () => {
             if (overlay || runtime.globalVars.isTransitioning === 1) return;
-            playClick();
-            openEndScreen();
+            playClick(); openEndScreen();
         });
-        if (endMenuButton) endMenuButton.addEventListener("click", () => {
-            playClick();
-            goToStartMenu();
-        });
+        if (endMenuButton) endMenuButton.addEventListener("click", () => { playClick(); goToStartMenu(); });
 
         let lastHudX = NaN;
         let lastHudY = NaN;
@@ -906,26 +799,27 @@ runOnStartup(runtime => {
             if (hudButtons.length) {
                 const view = viewRect(hudButtons[0].layer);
                 if (view.cx !== lastHudX || view.cy !== lastHudY) {
-                    lastHudX = view.cx;
-                    lastHudY = view.cy;
+                    lastHudX = view.cx; lastHudY = view.cy;
                     for (const button of hudButtons) {
                         const offset = followOffsets.get(button);
-                        button.x = view.cx + offset.dx;
-                        button.y = view.cy + offset.dy;
+                        button.x = view.cx + offset.dx; button.y = view.cy + offset.dy;
                     }
                 }
             }
 
-            // Динамическое позиционирование кнопки смены комнаты
             if (changeFrameButton) {
                 const view = viewRect(changeFrameButton.layer);
-                
-                // Слева оставляем -950, справа делаем 865
                 const offsetX = runtime.globalVars.roomSelect === 1 ? 865 : -950; 
                 changeFrameButton.x = view.cx + offsetX;
-                
-                // Поднимаем выше
                 changeFrameButton.y = view.cy - 200; 
+            }
+
+            if (catState === 2) {
+                catAngryTimer -= runtime.dt;
+                if (catAngryTimer <= 0) {
+                    catState = 0;
+                    updateCatUI();
+                }
             }
 
             if (listPanel?.isVisible) renderListChecks();
@@ -952,7 +846,6 @@ runOnStartup(runtime => {
             if (runtime.globalVars.shopOpen === 0) return;
             if (coffeeInStock) { showShopMessage("Кофе уже куплен"); return; }
             if (varManager.instVars.Credits < COFFEE_PRICE) { showShopMessage("Не хватает талонов"); return; }
-            
             varManager.instVars.Credits -= COFFEE_PRICE;
             coffeeInStock = true;
             updateCreditsUI(); showShopMessage("Кофе куплен"); refreshShopTexts();
@@ -963,11 +856,14 @@ runOnStartup(runtime => {
             if (runtime.globalVars.shopOpen === 0) return;
             if (varManager.instVars.CatFood >= CATFOOD_MAX) { showShopMessage("Запас корма полон"); return; }
             if (varManager.instVars.Credits < CATFOOD_PRICE) { showShopMessage("Не хватает талонов"); return; }
-            
             varManager.instVars.Credits -= CATFOOD_PRICE;
             varManager.instVars.CatFood += 1;
-            updateCreditsUI(); showShopMessage("Корм куплен"); refreshShopTexts();
-            void saveCheckpoint("purchase");
+            
+            isCatFed = true;
+            showShopMessage("Корм куплен. Кошка придет на след. звонок.");
+            void saveCheckpoint("action");
+            
+            updateCreditsUI(); refreshShopTexts();
         });
 
         onRuntime("keydown", (e) => { 
@@ -982,10 +878,10 @@ runOnStartup(runtime => {
             coffeeButton.addEventListener("click", () => {
                 if (runtime.globalVars.isTransitioning === 1) return;
                 if (runtime.globalVars.shopOpen === 1 || !coffeeInStock) return;
-                
                 coffeeInStock = false;
                 varManager.instVars.Energy = Math.min(MAX_ENERGY, varManager.instVars.Energy + COFFEE_RESTORE);
                 updateEnergyUI(); coffeeButton.isVisible = false;
+                void saveCheckpoint("action");
             });
         }
 
@@ -995,31 +891,28 @@ runOnStartup(runtime => {
                 if (runtime.globalVars.isTransitioning === 1) return;
                 if (runtime.globalVars.shopOpen === 1) return;
                 
+                if (devicesUsed[index]) {
+                    if (dialogText) { dialogTab = "devices"; renderDialog(); dialogText.text = `Прибор ${index} уже использован.`; }
+                    return;
+                }
+
                 const cost = energyCosts[index] || 1;
-                
                 if (varManager.instVars.Energy < cost) {
-                    if (dialogText) {
-                        dialogTab = "devices";
-                        renderDialog();
-                        dialogText.text = `Недостаточно энергии. (Требуется: ${cost})`;
-                    }
+                    if (dialogText) { dialogTab = "devices"; renderDialog(); dialogText.text = `Недостаточно энергии. (Требуется: ${cost})`; }
                     return;
                 }
                 
+                devicesUsed[index] = true; 
                 showDevice(index);
                 varManager.instVars.Energy -= cost;
                 varManager.instVars.EnergySpent += cost; 
                 updateEnergyUI();
                 
+                void saveCheckpoint("action");
+
                 if (varManager.instVars.Energy <= 0) {
-                    varManager.instVars.Energy = 0;
-                    updateEnergyUI();
-                    isGameOver = true;
-                    
-                    setTimeout(() => {
-                        if (dialogText) dialogText.text = "ЭНЕРГИЯ ИСЧЕРПАНА. СВЯЗЬ ПРЕРВАНА...";
-                        openEndScreen();
-                    }, 600);
+                    varManager.instVars.Energy = 0; updateEnergyUI(); isGameOver = true;
+                    setTimeout(() => { if (dialogText) dialogText.text = "ЭНЕРГИЯ ИСЧЕРПАНА. СВЯЗЬ ПРЕРВАНА..."; openEndScreen(); }, 600);
                 }
             });
         });
@@ -1033,10 +926,7 @@ runOnStartup(runtime => {
         const listParts = [...listRowTexts, ...listCheckCells, ...listCrossCells];
         const setListParts = (visible) => listParts.forEach(p => { p.isVisible = visible; });
         
-        const checklistTexts = Array.isArray(config.checklist) && config.checklist.length
-            ? config.checklist
-            : ["Есть в списке ожидаемых?", "Совпадают ли данные (частота, груз, маршрут)?",
-               "Совпадает ли погода?", "Совпадает ли фоновый шум?", "Однотипен ли голос?"];
+        const checklistTexts = Array.isArray(config.checklist) && config.checklist.length ? config.checklist : ["Есть в списке ожидаемых?", "Совпадают ли данные?", "Совпадает ли погода?", "Совпадает ли фон?", "Однотипен ли голос?"];
         listRowTexts.forEach((t, i) => { t.text = checklistTexts[i] ?? ""; });
 
         if (listPanel) listPanel.isVisible = false;
@@ -1046,21 +936,15 @@ runOnStartup(runtime => {
         if (savedHistory && typeof savedHistory === "object" && !Array.isArray(savedHistory)) {
             for (const [key, marks] of Object.entries(savedHistory)) {
                 if (!/^[1-9]\d*$/.test(key) || !Array.isArray(marks)) continue;
-                checklistHistory[key] = listRowTexts.map((_, i) =>
-                    marks[i] === 1 || marks[i] === 2 ? marks[i] : 0);
+                checklistHistory[key] = listRowTexts.map((_, i) => marks[i] === 1 || marks[i] === 2 ? marks[i] : 0);
             }
         }
-        const restoredMarks = Array.isArray(restoredSave?.listMarks)
-            ? restoredSave.listMarks
-            : (checklistHistory[String(callNumber)] ?? []);
-        const listMarks = listRowTexts.map((_, i) => {
-            const saved = restoredMarks[i];
-            return saved === 1 || saved === 2 ? saved : 0;
-        });
+        const restoredMarks = Array.isArray(restoredSave?.listMarks) ? restoredSave.listMarks : (checklistHistory[String(callNumber)] ?? []);
+        const listMarks = listRowTexts.map((_, i) => { const saved = restoredMarks[i]; return saved === 1 || saved === 2 ? saved : 0; });
+        
         function renderListChecks() {
             const setFrame = (cell, target) => {
-                cell.animationSpeed = 0;
-                cell.stopAnimation();
+                cell.animationSpeed = 0; cell.stopAnimation();
                 if (cell.animationFrame !== target) cell.animationFrame = target;
             };
             listMarks.forEach((mark, i) => {
@@ -1071,15 +955,13 @@ runOnStartup(runtime => {
         renderListChecks();
         setListParts(false);
 
-        let saveRevision = Number.isSafeInteger(restoredSave?.revision) && restoredSave.revision >= 0
-            ? restoredSave.revision : 0;
+        let saveRevision = Number.isSafeInteger(restoredSave?.revision) && restoredSave.revision >= 0 ? restoredSave.revision : 0;
 
         function makeCheckpoint() {
             const variables = {};
             for (const name of VAR_NAMES) variables[name] = varManager.instVars[name];
             const currentMarks = listMarks.slice();
-            const allCallMarks = Object.fromEntries(
-                Object.entries(checklistHistory).map(([call, marks]) => [call, marks.slice()]));
+            const allCallMarks = Object.fromEntries(Object.entries(checklistHistory).map(([call, marks]) => [call, marks.slice()]));
             allCallMarks[String(callNumber)] = currentMarks.slice();
             return {
                 version: 2,
@@ -1088,16 +970,19 @@ runOnStartup(runtime => {
                 variables,
                 roomSelect: runtime.globalVars.roomSelect === 1 ? 1 : 0,
                 coffeeInStock,
-                inventory: {
-                    coffeeInStock,
-                    catFood: varManager.instVars.CatFood
-                },
+                inventory: { coffeeInStock, catFood: varManager.instVars.CatFood },
                 dialog: { tab: dialogTab === "questions" ? "radio" : dialogTab, device: currentDevice },
                 questionsAsked: questionsAsked.map(Boolean),
+                devicesUsed: devicesUsed.slice(), 
+                chatHistory: chatHistory.slice(), 
                 callNumber,
                 listMarks: currentMarks,
                 checklistHistory: allCallMarks,
-                isShopDisabled: isShopDisabled 
+                isShopDisabled: isShopDisabled,
+                catState: catState,
+                catAngryTimer: catAngryTimer,
+                isCatFed: isCatFed,
+                echoMistakes: echoMistakes
             };
         }
 
@@ -1107,30 +992,23 @@ runOnStartup(runtime => {
             saveNoticeText.colorRgb = isError ? [1, 0.38, 0.36] : [0.36, 1, 0.55];
             saveNoticeText.opacity = 1;
             saveNoticeText.isVisible = true;
-            saveNoticeExpires = Date.now() + 3500;
+            saveNoticeExpires = Date.now() + (text === "." ? 500 : 3500);
             const view = viewRect(saveNoticeText.layer);
             const off = followOffsets.get(saveNoticeText);
             if (off) { saveNoticeText.x = view.cx + off.dx; saveNoticeText.y = view.cy + off.dy; }
         }
-        if (newGameSaveWarning) {
-            showSaveNotice(newGameSaveWarning, true);
-            newGameSaveWarning = "";
-        }
+        if (newGameSaveWarning) { showSaveNotice(newGameSaveWarning, true); newGameSaveWarning = ""; }
 
         function saveCheckpoint(reason) {
-            if (reason !== "purchase" && reason !== "new-call" && reason !== "settings" && reason !== "shop-closed") {
-                return Promise.resolve(false);
-            }
+            if (!["purchase", "new-call", "settings", "shop-closed", "action"].includes(reason)) return Promise.resolve(false);
             const snapshot = makeCheckpoint();
             return storageOperation(() => writeCheckpoint(snapshot))
                 .then(() => {
-                    if (reason === "purchase" || reason === "new-call") {
-                        showSaveNotice("ИГРА СОХРАНЕНА");
-                    }
+                    if (reason === "action") showSaveNotice("."); 
+                    else showSaveNotice("ИГРА СОХРАНЕНА");
                     return true;
                 })
                 .catch(e => {
-                    console.error("Сохранение SIDE ECHO не удалось", e);
                     saveFolderProblem = e?.message || String(e);
                     showSaveNotice("ОШИБКА СОХРАНЕНИЯ", true);
                     return false;
@@ -1163,13 +1041,18 @@ runOnStartup(runtime => {
             }
 
             if (isPointerOver(dialogTabRadio, e.clientX, e.clientY)) {
-                if (dialogTab !== "radio") { dialogTab = "radio"; hoveredQuestion = -1; renderDialog(); }
+                if (dialogTab !== "radio" && dialogTab !== "questions") { dialogTab = "radio"; hoveredQuestion = -1; renderDialog(); }
                 return;
             }
             if (isPointerOver(dialogTabDevices, e.clientX, e.clientY)) {
                 if (dialogTab !== "devices") { dialogTab = "devices"; hoveredQuestion = -1; renderDialog(); }
                 return;
             }
+            if (isPointerOver(dialogTabMail, e.clientX, e.clientY)) {
+                if (dialogTab !== "mail") { dialogTab = "mail"; hoveredQuestion = -1; renderDialog(); }
+                return;
+            }
+
             const clickedQuestion = questionAt(e.clientX, e.clientY);
             if (clickedQuestion >= 0) { askQuestion(clickedQuestion); return; }
 
@@ -1185,12 +1068,26 @@ runOnStartup(runtime => {
             for (let i = 0; i < listMarks.length; i++) {
                 if (isPointerOver(listCheckCells[i], e.clientX, e.clientY)) {
                     listMarks[i] = listMarks[i] === 1 ? 0 : 1;
-                    renderListChecks();
-                    break;
+                    renderListChecks(); break;
                 }
                 if (isPointerOver(listCrossCells[i], e.clientX, e.clientY)) {
                     listMarks[i] = listMarks[i] === 2 ? 0 : 2;
-                    renderListChecks();
+                    renderListChecks(); 
+                    
+                    if (listMarks[i] === 2) { 
+                        if (catState === 1) { 
+                            echoMistakes++;
+                            if (echoMistakes >= 2) {
+                                catState = 2; 
+                                catAngryTimer = 5; 
+                                updateCatUI();
+                                showSaveNotice("Кошка зашипела!", true);
+                                void saveCheckpoint("action");
+                            }
+                        }
+                    } else {
+                        if (echoMistakes > 0) echoMistakes--; 
+                    }
                     break;
                 }
             }
@@ -1209,6 +1106,7 @@ runOnStartup(runtime => {
         updateCreditsUI();
         refreshShopTexts();
         renderDialog();
+        updateCatUI();
         
         globalThis.sideEcho = { 
             config: config,
