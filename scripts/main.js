@@ -1,5 +1,5 @@
 // ================================================================
-// SIDE ECHO — main.js (лимит 10 звонков)
+// SIDE ECHO — main.js (исправлена позиция кошки)
 // ================================================================
 
 runOnStartup(runtime => {
@@ -394,7 +394,6 @@ runOnStartup(runtime => {
         const energySegments = getAll("energySegment").sort((a, b) => a.x - b.x);
         const changeFrameButton = getOne("changeFrameButton");
         const shopButton = getOne("shopButton");
-        
         const catFace = getOne("catFace");
 
         const MAX_ENERGY = 10;             
@@ -416,6 +415,12 @@ runOnStartup(runtime => {
 
         const devicesUsed = restoredSave?.devicesUsed || [false, false, false];
         const chatHistory = restoredSave?.chatHistory || [];
+        let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1 ? restoredSave.callNumber : 1;
+
+        let lastDeviceText = restoredSave?.lastDeviceText || "Выберите прибор для анализа.";
+
+        let currentPerson = restoredSave?.currentPerson || (config.persons && config.persons[0]) || null;
+        let currentSpeaker = currentPerson && currentPerson.isEcho && currentPerson.echo_value ? currentPerson.echo_value : currentPerson;
 
         if (isShopDisabled && shopButton) shopButton.isVisible = false;
 
@@ -472,37 +477,67 @@ runOnStartup(runtime => {
             catFace.animationFrame = catState;
             catFace.isVisible = (catState > 0);
             
+            // Привязываем кошку к видимому экрану (правый нижний угол)
             const view = viewRect(catFace.layer);
-            catFace.x = runtime.layout.width - 100; 
-            catFace.y = runtime.layout.height - 100; 
+            catFace.x = view.cx + view.w / 2 - 150; 
+            catFace.y = view.cy + view.h / 2 - 150; 
         }
 
         const CALL_TEMPLATE = config.texts?.radioCall ?? "Звонок Nº 1";
-        let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1 ? restoredSave.callNumber : 1;
         const callText = () => CALL_TEMPLATE.replace(/\d+\s*$/, String(callNumber));
         
         let dialogTab = restoredSave?.dialog?.tab || "radio"; 
         let currentDevice = Number.isInteger(restoredSave?.dialog?.device) ? restoredSave.dialog.device : null;
 
+        function generatePhrase(categoryKey) {
+            if (!config.answers || !config.answers[categoryKey]) return "...";
+            let pool = config.answers[categoryKey];
+            if (!Array.isArray(pool) || pool.length === 0) return "...";
+
+            const template = pool[Math.floor(Math.random() * pool.length)];
+            if (!currentSpeaker) return template;
+
+            return template
+                .replace(/{name}/g, currentSpeaker.name || "")
+                .replace(/{cargo}/g, currentSpeaker.cargo || "")
+                .replace(/{code_phrase}/g, currentSpeaker.code_phrase || "")
+                .replace(/{weather}/g, currentSpeaker.weather || "")
+                .replace(/{biome}/g, currentSpeaker.biome || "")
+                .replace(/{route_start}/g, currentSpeaker.route?.start || "")
+                .replace(/{route_end}/g, currentSpeaker.route?.end || "");
+        }
+
         function renderDialog() {
-            const radioMode = dialogTab === "radio" || dialogTab === "questions";
+            const radioMode = dialogTab === "radio";
+            const questionsMode = dialogTab === "questions";
             const deviceMode = dialogTab === "devices";
             const mailMode = dialogTab === "mail";
 
-            if (dialogTabRadio) dialogTabRadio.animationFrame = dialogTab === "radio" ? 1 : 0;
+            if (dialogTabRadio) dialogTabRadio.animationFrame = (radioMode || questionsMode) ? 1 : 0;
             if (dialogTabDevices) dialogTabDevices.animationFrame = deviceMode ? 1 : 0;
             if (dialogTabMail) dialogTabMail.animationFrame = mailMode ? 1 : 0;
             
-            radioButtons.forEach(b => { b.isVisible = radioMode; });
+            radioButtons.forEach(b => { b.isVisible = (radioMode || questionsMode); });
             renderQuestions();
+            
             if (!dialogText) return;
 
-            if (radioMode) {
-                dialogText.text = chatHistory.length > 0 ? chatHistory.join("\n") : callText();
-            } else if (mailMode) {
-                dialogText.text = "Входящих сообщений нет.\n\n(Здесь будет лор)";
+            if (questionsMode) {
+                dialogText.isVisible = false;
+                return;
             } else {
-                dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
+                dialogText.isVisible = true;
+            }
+
+            if (radioMode) {
+                const visibleHistory = chatHistory.slice(-6);
+                dialogText.text = visibleHistory.length > 0 ? visibleHistory.join("\n\n") : callText();
+            } else if (mailMode) {
+                const totalCalls = 10;
+                const remaining = Math.max(0, totalCalls - callNumber + 1);
+                dialogText.text = `ВХОДЯЩИЕ СИГНАЛЫ:\nВсего за смену: ${totalCalls}\nОжидается вызовов: ${remaining}\n\n(Сообщения Морзе будут здесь)`;
+            } else {
+                dialogText.text = lastDeviceText;
             }
         }
 
@@ -540,7 +575,14 @@ runOnStartup(runtime => {
             if (i < 0 || questionsAsked[i]) return;
             questionsAsked[i] = true;
             
-            chatHistory.push(`> ${questions[i]}`);
+            const categories = ["code_phrase", "cargo", "weather", "biome"];
+            const category = categories[i];
+            
+            const answer = generatePhrase(category);
+            chatHistory.push(`[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${answer}`);
+            
+            dialogTab = "radio";
+            
             renderQuestions();
             renderDialog();
             
@@ -553,24 +595,40 @@ runOnStartup(runtime => {
             renderQuestions();
         }
 
-        // ИЗМЕНЕННАЯ ФУНКЦИЯ: Добавлена проверка на 10-й звонок
         function startNextCall() {
             if (callNumber >= 10) {
                 isGameOver = true;
-                openEndScreen(); // Вызываем экран итогов
-                return; // Прерываем функцию, 11-й звонок не начнется
+                openEndScreen(); 
+                return; 
             }
 
             checklistHistory[String(callNumber)] = listMarks.slice();
             callNumber += 1;
             resetQuestions();
+            
+            for (let i = 0; i < listMarks.length; i++) {
+                listMarks[i] = 0;
+            }
+            
             renderListChecks();
             currentDevice = null;
             dialogTab = "radio";
             hoveredQuestion = -1;
             
+            if (config.persons && config.persons.length > 0) {
+                const personIndex = (callNumber - 1) % config.persons.length;
+                currentPerson = config.persons[personIndex];
+                currentSpeaker = currentPerson.isEcho && currentPerson.echo_value ? currentPerson.echo_value : currentPerson;
+            }
+            
             chatHistory.length = 0; 
-            chatHistory.push(`[Звонок ${callNumber}]`);
+            chatHistory.push(`[color=#aaaaaa][i]Звонок ${callNumber}[/i][/color]`);
+            if (currentSpeaker) {
+                chatHistory.push(`[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${generatePhrase("greetings")}`);
+            }
+            
+            lastDeviceText = "Выберите прибор для анализа.";
+            
             renderDialog();
 
             echoMistakes = 0; 
@@ -582,9 +640,39 @@ runOnStartup(runtime => {
             
             void saveCheckpoint("new-call");
         }
+        
         function showDeviceTab() { dialogTab = "devices"; renderDialog(); }
-        function showDevice(index) { currentDevice = index; showDeviceTab(); }
+        
+        function showDevice(index) { 
+            currentDevice = index; 
+            dialogTab = "devices"; 
+            
+            let deviceText = "";
+            const realPerson = currentPerson; 
+            const analyzer = realPerson.analyzer || {};
 
+            if (index === 0) { 
+                let sounds = [];
+                if (analyzer.precipitation) sounds.push(`Осадки: ${analyzer.precipitation}`);
+                if (analyzer.wind) sounds.push(`Ветер: ${analyzer.wind}`);
+                if (analyzer.engine) sounds.push(`Двигатель: ${analyzer.engine}`);
+                if (analyzer.other_sounds) sounds.push(`Прочее: ${analyzer.other_sounds}`);
+                
+                deviceText = sounds.length > 0 ? sounds.join(".\n") : "Фоновый шум не распознан.";
+            } else if (index === 1) { 
+                if (realPerson.isEcho) deviceText = generatePhrase("voice_analysis_echo");
+                else deviceText = generatePhrase("voice_analysis_man");
+            } else if (index === 2) { 
+                const realWeather = realPerson.weather ? realPerson.weather.toLowerCase() : "";
+                deviceText = `Радар показывает: ${realWeather} в районе конечного пункта.`;
+            }
+            
+            lastDeviceText = `[color=#84e6a6][b]Прибор ${index + 1}:[/b][/color]\n${deviceText}`;
+            renderDialog();
+            void saveCheckpoint("action");
+        }
+
+        // --- МАГАЗИН ---
         const shopCloseButton = getOne("shopCloseButton");
         const shopCoffeeBuyButton = getOne("shopCoffeeBuyButton");
         const shopCatFoodBuyButton = getOne("shopCatFoodBuyButton");
@@ -892,13 +980,13 @@ runOnStartup(runtime => {
                 if (runtime.globalVars.shopOpen === 1) return;
                 
                 if (devicesUsed[index]) {
-                    if (dialogText) { dialogTab = "devices"; renderDialog(); dialogText.text = `Прибор ${index} уже использован.`; }
+                    if (dialogText) { dialogTab = "devices"; renderDialog(); lastDeviceText = `Прибор ${index} уже использован.`; }
                     return;
                 }
 
                 const cost = energyCosts[index] || 1;
                 if (varManager.instVars.Energy < cost) {
-                    if (dialogText) { dialogTab = "devices"; renderDialog(); dialogText.text = `Недостаточно энергии. (Требуется: ${cost})`; }
+                    if (dialogText) { dialogTab = "devices"; renderDialog(); lastDeviceText = `Недостаточно энергии. (Требуется: ${cost})`; }
                     return;
                 }
                 
@@ -976,6 +1064,8 @@ runOnStartup(runtime => {
                 devicesUsed: devicesUsed.slice(), 
                 chatHistory: chatHistory.slice(), 
                 callNumber,
+                currentPerson: currentPerson, 
+                lastDeviceText: lastDeviceText,
                 listMarks: currentMarks,
                 checklistHistory: allCallMarks,
                 isShopDisabled: isShopDisabled,
@@ -1101,6 +1191,13 @@ runOnStartup(runtime => {
             hoveredQuestion = hovered;
             renderQuestions();
         });
+
+        if (!restoredSave && chatHistory.length === 0) {
+            chatHistory.push(`[color=#aaaaaa][i]Звонок ${callNumber}[/i][/color]`);
+            if (currentSpeaker) {
+                chatHistory.push(`[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${generatePhrase("greetings")}`);
+            }
+        }
 
         updateEnergyUI();
         updateCreditsUI();
