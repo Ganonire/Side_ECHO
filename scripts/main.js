@@ -539,8 +539,7 @@ runOnStartup(runtime => {
                 energyBar.isVisible = ratio > 0;
             }
 
-            const isOutOfEnergy = energy <= 0;
-            energyButtons.forEach(btn => { btn.opacity = isOutOfEnergy ? 0.4 : 1.0; });
+            renderDeviceButtons();
         }
 
         function updateCreditsUI() {
@@ -569,6 +568,19 @@ runOnStartup(runtime => {
         let dialogTab = restoredSave?.dialog?.tab === "devices" ? "devices" : "radio";
         let currentDevice = Number.isInteger(restoredSave?.dialog?.device)
             ? restoredSave.dialog.device : null;
+
+        // Приборы: каждый можно использовать один раз за звонок. Энергия
+        // тратится только при первом использовании; повторное нажатие просто
+        // показывает результат, ничего не списывая. Новый звонок («Передать
+        // координаты» / «Отклонить») снова открывает все приборы.
+        const devicesUsed = energyButtons.map((_, i) => restoredSave?.devicesUsed?.[i] === true);
+        function renderDeviceButtons() {
+            const outOfEnergy = varManager.instVars.Energy <= 0;
+            // Использованный прибор и отсутствие энергии отображаются приглушённо.
+            energyButtons.forEach((btn, i) => {
+                btn.opacity = (devicesUsed[i] || outOfEnergy) ? 0.4 : 1.0;
+            });
+        }
 
         function renderDialog() {
             const radioMode = dialogTab !== "devices";
@@ -638,6 +650,8 @@ runOnStartup(runtime => {
             resetQuestions();
             renderListChecks();
             currentDevice = null;
+            devicesUsed.fill(false);
+            renderDeviceButtons();
             dialogTab = "radio";
             hoveredQuestion = -1;
             renderDialog();
@@ -995,6 +1009,13 @@ runOnStartup(runtime => {
                 if (runtime.globalVars.isTransitioning === 1) return;
                 if (runtime.globalVars.shopOpen === 1) return;
                 
+                // Прибор уже использован в этом звонке: энергия не тратится,
+                // просто снова показываем его результат.
+                if (devicesUsed[index]) {
+                    showDevice(index);
+                    return;
+                }
+
                 const cost = energyCosts[index] || 1;
                 
                 if (varManager.instVars.Energy < cost) {
@@ -1007,9 +1028,11 @@ runOnStartup(runtime => {
                 }
                 
                 showDevice(index);
+                devicesUsed[index] = true;
                 varManager.instVars.Energy -= cost;
                 varManager.instVars.EnergySpent += cost; 
                 updateEnergyUI();
+                renderDeviceButtons();
                 
                 if (varManager.instVars.Energy <= 0) {
                     varManager.instVars.Energy = 0;
@@ -1095,6 +1118,7 @@ runOnStartup(runtime => {
                 dialog: { tab: dialogTab === "questions" ? "radio" : dialogTab, device: currentDevice },
                 questionsAsked: questionsAsked.map(Boolean),
                 callNumber,
+                devicesUsed: devicesUsed.map(Boolean),
                 listMarks: currentMarks,
                 checklistHistory: allCallMarks,
                 isShopDisabled: isShopDisabled 
