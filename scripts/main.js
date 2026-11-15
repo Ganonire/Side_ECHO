@@ -476,6 +476,7 @@ runOnStartup(runtime => {
         const dialogText = getOne("dialogText");
         const dialogTabRadio = getOne("dialogTabRadio");
         const dialogTabDevices = getOne("dialogTabDevices");
+        const dialogTabMail = getOne("dialogTabMail");
         const askButton = getOne("askButton");
         const transferButton = getOne("transferButton");
         const declineButton = getOne("declineButton");
@@ -565,7 +566,9 @@ runOnStartup(runtime => {
         let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1
             ? restoredSave.callNumber : 1;
         const callText = () => CALL_TEMPLATE.replace(/\d+\s*$/, String(callNumber));
-        let dialogTab = restoredSave?.dialog?.tab === "devices" ? "devices" : "radio";
+        let dialogTab = restoredSave?.dialog?.tab === "devices" ? "devices"
+              : restoredSave?.dialog?.tab === "mail"    ? "mail"
+              : "radio";
         let currentDevice = Number.isInteger(restoredSave?.dialog?.device)
             ? restoredSave.dialog.device : null;
 
@@ -583,16 +586,19 @@ runOnStartup(runtime => {
         }
 
         function renderDialog() {
-            const radioMode = dialogTab !== "devices";
-            if (dialogTabRadio) dialogTabRadio.animationFrame = radioMode ? 1 : 0;
-            if (dialogTabDevices) dialogTabDevices.animationFrame = radioMode ? 0 : 1;
-            radioButtons.forEach(b => { b.isVisible = radioMode; });
+            const radioMode   = dialogTab === "radio";
+            const devicesMode = dialogTab === "devices";
+            const mailMode    = dialogTab === "mail";
+            
+            if (dialogTabRadio)   dialogTabRadio.animationFrame   = radioMode   ? 1 : 0;
+            if (dialogTabDevices) dialogTabDevices.animationFrame = devicesMode ? 1 : 0;
+            if (dialogTabMail)    dialogTabMail.animationFrame    = mailMode    ? 1 : 0;radioButtons.forEach(b => { b.isVisible = radioMode; });
             renderQuestions();
             if (!dialogText) return;
-
-            if (radioMode) dialogText.text = callText();
-            else dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
-        }
+            if (radioMode)        dialogText.text = callText();
+            else if (devicesMode) dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
+            else                  dialogText.text = "Почта: ...";   // <-- заглушка для mail
+}
 
         const questions = (Array.isArray(config.questions) && config.questions.length
             ? config.questions
@@ -1115,7 +1121,7 @@ runOnStartup(runtime => {
                     coffeeInStock,
                     catFood: varManager.instVars.CatFood
                 },
-                dialog: { tab: dialogTab === "questions" ? "radio" : dialogTab, device: currentDevice },
+                dialog: { tab: (dialogTab === "questions" ? "radio" : dialogTab), device: currentDevice },
                 questionsAsked: questionsAsked.map(Boolean),
                 callNumber,
                 devicesUsed: devicesUsed.map(Boolean),

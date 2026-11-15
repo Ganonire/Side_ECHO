@@ -157,7 +157,8 @@
 			"listRowText",
 			"listCheckCell",
 			"listCrossCell",
-			"menuExitButton"
+			"menuExitButton",
+			"dialogTabMail"
 		],
 		"subfolders": []
 	},
