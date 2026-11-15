@@ -2,6 +2,8 @@
 // SIDE ECHO — main.js (сохранения в My Games)
 // Главное меню, контрольные сохранения и игровой UI.
 // Энергия: Максимум 10, кофе +3, третья кнопка -2, при 0 — конец игры.
+// Магазин: принудительно 1 раз после подсказки, перекрывает весь UI.
+// Кнопка смены комнаты: слева -950, справа 865, поднята выше.
 // ================================================================
 
 runOnStartup(runtime => {
@@ -28,7 +30,6 @@ runOnStartup(runtime => {
     let saveFolderProblem = "";
     let newGameSaveWarning = "";
 
-    // Static placeholder panel. No audio/display/fullscreen APIs or settings storage.
     function createSettingsController({beforeOpen = () => true, afterClose = () => {}} = {}) {
         const layer = runtime.layout.getLayer("Options");
         const parts = SETTINGS_TYPES.flatMap(name =>
@@ -492,20 +493,28 @@ runOnStartup(runtime => {
         const endMenuButton = getOne("endMenuButton");
         const endTempButton = getOne("endTempButton");
         const energySegments = getAll("energySegment").sort((a, b) => a.x - b.x);
+        const changeFrameButton = getOne("changeFrameButton");
+        const shopButton = getOne("shopButton");
 
         // ==========================================
-        // НОВЫЕ НАСТРОЙКИ ЭНЕРГИИ
+        // НАСТРОЙКИ ЭНЕРГИИ И ФЛАГИ СОСТОЯНИЯ
         // ==========================================
-        const MAX_ENERGY = 10;             // Максимум 10 слотов
+        const MAX_ENERGY = 10;             
         const CURRENCY_LABEL = "ТАЛОНЫ";
         const COFFEE_PRICE = 3;
-        const COFFEE_RESTORE = 3;          // Кофе восстанавливает только 3
+        const COFFEE_RESTORE = 3;          
         const CATFOOD_PRICE = 2;
         const CATFOOD_MAX = 5;
-        const energyCosts = [2, 1, 1];     // Третья кнопка стоит 2 энергии
+        const energyCosts = [2, 1, 1];     
         
-        // Флаг для предотвращения повторного вызова геймовера
         let isGameOver = false; 
+        
+        let isShopDisabled = restoredSave?.isShopDisabled === true;
+        let isTutorialPhase = !restoredSave && !isShopDisabled; 
+
+        if (isShopDisabled && shopButton) {
+            shopButton.isVisible = false;
+        }
 
         let lastDisplayedEnergy = NaN;
         let lastDisplayedCredits = NaN;
@@ -635,7 +644,6 @@ runOnStartup(runtime => {
         function showDeviceTab() { dialogTab = "devices"; renderDialog(); }
         function showDevice(index) { currentDevice = index; showDeviceTab(); }
 
-        const shopButton = getOne("shopButton");
         const shopCloseButton = getOne("shopCloseButton");
         const shopCoffeeBuyButton = getOne("shopCoffeeBuyButton");
         const shopCatFoodBuyButton = getOne("shopCatFoodBuyButton");
@@ -645,8 +653,7 @@ runOnStartup(runtime => {
 
         const SHOP_PART_NAMES = ["shopPanel", "shopTitleText", "shopCreditsText", "shopMessageText", "shopCoffeeText", "shopCatFoodText", "shopCloseButton", "shopCoffeeBuyButton", "shopCatFoodBuyButton"];
         const shopParts = SHOP_PART_NAMES.flatMap(getAll);
-        const coveredButtons = [...energyButtons, getOne("changeFrameButton")].filter(Boolean);
-
+        
         let coffeeInStock = (typeof restoredSave?.inventory?.coffeeInStock === "boolean"
             ? restoredSave.inventory.coffeeInStock : restoredSave?.coffeeInStock) === true;
         let messageTimer = null;
@@ -661,24 +668,6 @@ runOnStartup(runtime => {
         function refreshShopTexts() {
             if (shopCoffeeText) shopCoffeeText.text = `Кофе (цена: ${COFFEE_PRICE})${coffeeInStock ? " — куплен" : ""}\nВосстанавливает 3 энергии`;
             if (shopCatFoodText) shopCatFoodText.text = `Кошачий корм (цена: ${CATFOOD_PRICE})\nЗапас: ${varManager.instVars.CatFood}/${CATFOOD_MAX}`;
-        }
-
-        function openShop() {
-            if (runtime.globalVars.shopOpen === 1) return;
-            runtime.globalVars.shopOpen = 1; 
-            coveredButtons.forEach(b => { b.isVisible = false; });
-            if (coffeeButton) coffeeButton.isVisible = false;
-            shopParts.forEach(p => { p.isVisible = true; });
-            if (shopMessageText) shopMessageText.text = "";
-            refreshShopTexts();
-        }
-
-        function closeShop() {
-            if (runtime.globalVars.shopOpen === 0) return;
-            runtime.globalVars.shopOpen = 0; 
-            shopParts.forEach(p => { p.isVisible = false; });
-            coveredButtons.forEach(b => { b.isVisible = true; });
-            if (coffeeButton) coffeeButton.isVisible = coffeeInStock;
         }
 
         const endText = {
@@ -706,10 +695,13 @@ runOnStartup(runtime => {
         const DESIGN_CX = 935;
         const DESIGN_CY = 540;
         const hudButtons = [hintButton, settingsButton, saveNoticeText].filter(Boolean);
-        const followParts = [...hudButtons, ...hintParts, ...endParts];
+        
+        const followParts = [...hudButtons, ...hintParts, ...endParts, ...shopParts];
+        
         const followOffsets = new Map(
             followParts.map(o => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }])
         );
+        
         const fullscreenPanels = new Set([...getAll("hintPanel"), ...getAll("endPanel")]);
 
         function viewRect(layer) {
@@ -728,31 +720,78 @@ runOnStartup(runtime => {
             }
         }
 
-        const gameDomButtons = [
-            ...energyButtons, getOne("changeFrameButton"), coffeeButton, shopButton,
-            shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton,
-            hintButton, settingsButton, endTempButton, ...radioButtons
-        ].filter(Boolean);
-        const savedDomVisibility = new Map();
-        let overlay = null;
-
-        function openOverlay(kind, parts) {
-            if (overlay || runtime.globalVars.isTransitioning === 1) return false;
-            overlay = kind;
-            gameDomButtons.forEach(b => { savedDomVisibility.set(b, b.isVisible); b.isVisible = false; });
+        function centerPartsOnScreen(parts) {
             const cachedViews = new Map();
             parts.forEach(p => {
                 let view = cachedViews.get(p.layer);
                 if (!view) { view = viewRect(p.layer); cachedViews.set(p.layer, view); }
                 const off = followOffsets.get(p);
-                p.x = view.cx + off.dx;
-                p.y = view.cy + off.dy;
+                if (off) {
+                    p.x = view.cx + off.dx;
+                    p.y = view.cy + off.dy;
+                }
                 if (fullscreenPanels.has(p)) {
                     p.width = view.w + 4;
                     p.height = view.h + 4;
                 }
-                p.isVisible = true;
             });
+        }
+
+        const uiToHideInShop = [
+            ...energyButtons, changeFrameButton, coffeeButton, shopButton,
+            hintButton, settingsButton, endTempButton, ...radioButtons
+        ].filter(Boolean);
+
+        const savedDomVisibility = new Map();
+        let overlay = null;
+
+        function openShop() {
+            if (runtime.globalVars.shopOpen === 1) return;
+            runtime.globalVars.shopOpen = 1; 
+            
+            uiToHideInShop.forEach(b => { 
+                savedDomVisibility.set(b, b.isVisible); 
+                b.isVisible = false; 
+            });
+            
+            centerPartsOnScreen(shopParts);
+            
+            shopParts.forEach(p => { p.isVisible = true; });
+            if (shopMessageText) shopMessageText.text = "";
+            refreshShopTexts();
+        }
+
+        function closeShop() {
+            if (runtime.globalVars.shopOpen === 0) return;
+            runtime.globalVars.shopOpen = 0; 
+            shopParts.forEach(p => { p.isVisible = false; });
+            
+            uiToHideInShop.forEach(b => {
+                b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
+            });
+            
+            if (coffeeButton) coffeeButton.isVisible = coffeeInStock;
+
+            if (!isShopDisabled) {
+                isShopDisabled = true;
+                if (shopButton) shopButton.isVisible = false;
+                console.log("Магазин закрыт. Больше он не появится.");
+                void saveCheckpoint("shop-closed"); 
+            }
+        }
+
+        const gameDomButtons = [
+            ...energyButtons, changeFrameButton, coffeeButton, shopButton,
+            shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton,
+            hintButton, settingsButton, endTempButton, ...radioButtons
+        ].filter(Boolean);
+
+        function openOverlay(kind, parts) {
+            if (overlay || runtime.globalVars.isTransitioning === 1) return false;
+            overlay = kind;
+            gameDomButtons.forEach(b => { savedDomVisibility.set(b, b.isVisible); b.isVisible = false; });
+            centerPartsOnScreen(parts);
+            parts.forEach(p => { p.isVisible = true; });
             return true;
         }
 
@@ -772,7 +811,14 @@ runOnStartup(runtime => {
         }
 
         const openHint = () => openOverlay("hint", hintParts);
-        const closeHint = () => closeOverlay("hint", hintParts);
+        
+        const closeHint = () => {
+            closeOverlay("hint", hintParts);
+            if (isTutorialPhase && !isShopDisabled) {
+                isTutorialPhase = false; 
+                setTimeout(() => openShop(), 300); 
+            }
+        };
 
         function openEndScreen() {
             if (!openOverlay("end", endParts)) return;
@@ -785,6 +831,7 @@ runOnStartup(runtime => {
 
         hintParts.forEach(p => { p.isVisible = false; });
         endParts.forEach(p => { p.isVisible = false; });
+        shopParts.forEach(p => { p.isVisible = false; });
 
         if (hintButton) hintButton.addEventListener("click", () => {
             if (overlay || runtime.globalVars.isTransitioning === 1) return;
@@ -853,6 +900,7 @@ runOnStartup(runtime => {
                 if (remaining <= 0) saveNoticeText.isVisible = false;
                 else saveNoticeText.opacity = Math.min(1, remaining / 550);
             }
+
             if (hudButtons.length) {
                 const view = viewRect(hudButtons[0].layer);
                 if (view.cx !== lastHudX || view.cy !== lastHudY) {
@@ -865,11 +913,23 @@ runOnStartup(runtime => {
                     }
                 }
             }
+
+            // Динамическое позиционирование кнопки смены комнаты
+            if (changeFrameButton) {
+                const view = viewRect(changeFrameButton.layer);
+                
+                // Слева оставляем -950, справа делаем 865
+                const offsetX = runtime.globalVars.roomSelect === 1 ? 865 : -950; 
+                changeFrameButton.x = view.cx + offsetX;
+                
+                // Поднимаем выше
+                changeFrameButton.y = view.cy - 200; 
+            }
+
             if (listPanel?.isVisible) renderListChecks();
             if (varManager.instVars.Energy !== lastDisplayedEnergy) updateEnergyUI();
             if (varManager.instVars.Credits !== lastDisplayedCredits) updateCreditsUI();
             
-            // Страховка: геймовер если энергия упала до нуля
             if (varManager.instVars.Energy <= 0 && !isGameOver && !overlay && runtime.globalVars.isTransitioning === 0) {
                 isGameOver = true;
                 openEndScreen();
@@ -914,8 +974,6 @@ runOnStartup(runtime => {
             if (overlay) return;
             closeShop(); 
         });
-        
-        shopParts.forEach(p => { p.isVisible = false; });
 
         if (coffeeButton) {
             coffeeButton.isVisible = coffeeInStock;
@@ -929,9 +987,6 @@ runOnStartup(runtime => {
             });
         }
 
-        // ==========================================
-        // НОВАЯ ЛОГИКА КНОПОК ЭНЕРГИИ
-        // ==========================================
         energyButtons.forEach((button, index) => {
             button.addEventListener("click", () => {
                 if (isGameOver) return;
@@ -954,7 +1009,6 @@ runOnStartup(runtime => {
                 varManager.instVars.EnergySpent += cost; 
                 updateEnergyUI();
                 
-                // МГНОВЕННЫЙ ГЕЙМОВЕР ПРИ 0 ЭНЕРГИИ
                 if (varManager.instVars.Energy <= 0) {
                     varManager.instVars.Energy = 0;
                     updateEnergyUI();
@@ -1040,7 +1094,8 @@ runOnStartup(runtime => {
                 questionsAsked: questionsAsked.map(Boolean),
                 callNumber,
                 listMarks: currentMarks,
-                checklistHistory: allCallMarks
+                checklistHistory: allCallMarks,
+                isShopDisabled: isShopDisabled 
             };
         }
 
@@ -1061,7 +1116,7 @@ runOnStartup(runtime => {
         }
 
         function saveCheckpoint(reason) {
-            if (reason !== "purchase" && reason !== "new-call" && reason !== "settings") {
+            if (reason !== "purchase" && reason !== "new-call" && reason !== "settings" && reason !== "shop-closed") {
                 return Promise.resolve(false);
             }
             const snapshot = makeCheckpoint();

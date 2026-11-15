@@ -1,24 +1,24 @@
 {
-  "name": "MenuEvents",
-  "events": [
-    {
-      "eventType": "block",
-      "conditions": [
-        {
-          "id": "on-clicked",
-          "objectClass": "menuExitButton",
-          "sid": 908578129148917
-        }
-      ],
-      "actions": [
-        {
-          "id": "close",
-          "objectClass": "Browser",
-          "sid": 281804269170567
-        }
-      ],
-      "sid": 299708899518075
-    }
-  ],
-  "sid": 914836913053064
+	"name": "MenuEvents",
+	"events": [
+		{
+			"eventType": "block",
+			"conditions": [
+				{
+					"id": "on-clicked",
+					"objectClass": "menuExitButton",
+					"sid": 908578129148917
+				}
+			],
+			"actions": [
+				{
+					"id": "close",
+					"objectClass": "Browser",
+					"sid": 281804269170567
+				}
+			],
+			"sid": 299708899518075
+		}
+	],
+	"sid": 914836913053064
 }

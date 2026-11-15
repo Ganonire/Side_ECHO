@@ -1,9 +1,9 @@
 {
-  "name": "menuExitButton",
-  "plugin-id": "Button",
-  "sid": 128532759834022,
-  "isGlobal": false,
-  "editorNewInstanceIsReplica": true,
-  "instanceVariables": [],
-  "behaviorTypes": []
+	"name": "menuExitButton",
+	"plugin-id": "Button",
+	"sid": 128532759834022,
+	"isGlobal": false,
+	"editorNewInstanceIsReplica": true,
+	"instanceVariables": [],
+	"behaviorTypes": []
 }
