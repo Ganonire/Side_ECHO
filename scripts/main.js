@@ -1,18 +1,13 @@
 // ================================================================
 // SIDE ECHO — main.js (сохранения в My Games)
-// Главное меню, контрольные сохранения и игровой UI (оптимизированная версия).
-// Автосохранение строго после успешной покупки или появления нового звонка.
-// Кнопка «Настройки» в игре тоже сохраняет и уходит в главное меню.
-// Обычные действия игрока (приборы, перемещения, списки) НЕ сохраняются.
-// Переход между комнатами и звук также управляются Event Sheet Construct 3.
-// Меню настроек — заглушка только в StartMenu, на отдельном слое Options.
+// Главное меню, контрольные сохранения и игровой UI.
+// Энергия: Максимум 10, кофе +3, третья кнопка -2, при 0 — конец игры.
 // ================================================================
 
 runOnStartup(runtime => {
     const LEGACY_SAVE_KEY = "side-echo-checkpoint-v1";
     const SAVE_KEY = "side-echo-checkpoint-json-v2";
     const SAVE_FILENAME = "savegame.json";
-    // В Windows WebView2 <documents> указывает на системную папку «Документы».
     const SAVE_FOLDER = "My Games/Side ECHO";
     const SAVE_PATH = `${SAVE_FOLDER}/${SAVE_FILENAME}`;
     const DOCUMENTS_TAG = "<documents>";
@@ -56,7 +51,6 @@ runOnStartup(runtime => {
         return {open, close};
     }
 
-    // The packaged JSON is unchanged across room changes and menu returns.
     function loadGameConfig() {
         if (!configPromise) {
             configPromise = runtime.assets.getProjectFileUrl("tik.json")
@@ -69,20 +63,11 @@ runOnStartup(runtime => {
         return configPromise;
     }
 
-    // Последовательность операций защищает от гонки при двух быстрых покупках.
     function storageOperation(action) {
         queuedStorage = queuedStorage.catch(() => {}).then(action);
         return queuedStorage;
     }
 
-    // Два режима запуска:
-    // 1. Экспорт Windows WebView2: встроенный объект FileSystem имеет доступ
-    //    к <documents> БЕЗ диалогов — настоящий Документы/My Games/Side ECHO.
-    // 2. Preview Construct 3 (в том числе установленный PWA): браузерный sandbox.
-    //    Один раз выбрать «Документы» вручную, далее используется remembered handle.
-    // Ни при каком режиме НЕ подменять отсутствие файла старой копией Local Storage.
-    // File System must exist as a single-global Construct 3 object in project.c3proj.
-    // Browser preview uses its own picker tag, desktop export uses <documents>.
     const fsPlugin = runtime.objects.FileSystem;
     function hasDesktopDocuments() {
         return !!fsPlugin?.desktopFeaturesSupported &&
@@ -150,12 +135,8 @@ runOnStartup(runtime => {
         } catch (e) { console.warn("Доступ к Документам не проверен", e); return false; }
     }
 
-    // В Preview requestPermission/showDirectoryPicker нужно вызвать СРАЗУ
-    // из клика (до await), иначе браузер потеряет user activation.
     function requestDocumentsFromClick({forcePicker = false} = {}) {
         if (hasDesktopDocuments()) return Promise.resolve(true);
-        // The C3 plugin handles picker permissions and remembers the folder.
-        // Calling showFolderPicker() directly in the click handler keeps user activation.
         if (hasPluginPreviewDocuments()) {
             if (!forcePicker && fsPlugin.hasPickerTag(PREVIEW_PICKER_TAG)) {
                 return Promise.resolve(true);
@@ -172,7 +153,6 @@ runOnStartup(runtime => {
                 });
             } catch (e) { return Promise.reject(e); }
         }
-        // Compatibility path for older projects without the File System plugin.
         if (!supportsPreviewDocuments()) {
             return Promise.reject(new Error("Нет доступа к папке Документы в текущем режиме запуска"));
         }
@@ -202,7 +182,6 @@ runOnStartup(runtime => {
         });
     }
 
-    // Preview: размещаем файл внутри выбранных «Документов».
     async function getPreviewSaveHandle(create = false) {
         if (!projectRootHandle) return null;
         if (!await hasDocumentsPermission(create ? "readwrite" : "read")) {
@@ -238,9 +217,6 @@ runOnStartup(runtime => {
             /not found|no such file|не найден|cannot find the (?:path|file)|не удается найти указанный путь/i.test(e?.message || "");
     }
 
-    // Construct 3 File System may reject a missing file with a generic error
-    // like "read file error" or "delete file error" (no ENOENT/NotFoundError).
-    // Never use the error text itself to decide whether savegame.json exists.
     async function getNativeSaveFolderState(pickerTag) {
         const root = await fsPlugin.listContent(pickerTag, "", false);
         if (!root.folders.includes("My Games")) return {folderExists: false, fileExists: false};
@@ -261,15 +237,11 @@ runOnStartup(runtime => {
         }
     }
 
-    // Строго читаем savegame.json с диска; удалённый/повреждённый файл
-    // НЕ заменяется копией runtime.storage — кнопка Продолжить отключена.
     async function readCheckpoint() {
         try {
             let content;
             const nativeTag = getNativeSaveTag();
             if (nativeTag) {
-                // An absent save is normal (especially before the first purchase).
-                // Check the directory listing before trying to read it.
                 const state = await getNativeSaveFolderState(nativeTag);
                 if (!state.fileExists) {
                     saveFolderProblem = "";
@@ -300,8 +272,6 @@ runOnStartup(runtime => {
         const contents = JSON.stringify(data, null, 2) + "\n";
         const nativeTag = getNativeSaveTag();
         if (nativeTag) {
-            // Create only the missing folders; don't depend on generic write
-            // errors to decide whether directory creation is necessary.
             await ensureNativeSaveFolder(nativeTag);
             await fsPlugin.writeFile({
                 pickerTag: nativeTag,
@@ -312,20 +282,14 @@ runOnStartup(runtime => {
         } else {
             const handle = await getPreviewSaveHandle(true);
             if (!handle) throw new Error("Разреши доступ к папке Документы через Настройки");
-            // createWritable() без keepExistingData перезаписывает файл,
-            // независимо от того, существовал он до этой покупки или нет.
             const writer = await handle.createWritable({keepExistingData: false});
             try { await writer.write(contents); await writer.close(); }
             catch (e) { try { await writer.abort(); } catch (_) {} throw e; }
         }
-
-        // Не считаем сохранение успешным только по отсутствию ошибки записи:
-        // повторно читаем именно диск, чтобы исключить "успешно", но старый JSON.
         const savedOnDisk = await readCheckpoint();
         if (!savedOnDisk || JSON.stringify(savedOnDisk) !== JSON.stringify(data)) {
             throw new Error("После записи файл savegame.json не содержит новые данные");
         }
-        // Резерв только для ручного восстановления — не включает «Продолжить».
         try { await runtime.storage.setItem(SAVE_KEY, contents); }
         catch (e) { console.warn("Резервная копия недоступна (JSON сохранён)", e); }
     }
@@ -333,14 +297,11 @@ runOnStartup(runtime => {
     async function deleteCheckpoint() {
         const nativeTag = getNativeSaveTag();
         if (nativeTag) {
-            // Deleting a non-existent save may produce a generic "delete file
-            // error" in Construct, even though nothing is wrong.
             const state = await getNativeSaveFolderState(nativeTag);
             if (state.fileExists) await fsPlugin.delete(nativeTag, SAVE_PATH, false);
         } else {
             const handle = await getPreviewSaveHandle(false);
             if (handle) {
-                // Разрешение на запись проверяем перед удалением существующего файла.
                 if (!await hasDocumentsPermission("readwrite")) {
                     throw new Error("Нет разрешения на удаление старого сохранения");
                 }
@@ -381,16 +342,16 @@ runOnStartup(runtime => {
                 if (folderButton) { folderButton.isEnabled = false; folderButton.isVisible = false; }
             } else if (!supportsPreviewDocuments()) {
                 infoText.text = "Недоступна запись в Документы.\nДля автоматических сохранений нужна Windows-версия игры.";
-                if (folderButton) folderButton.isEnabled = false;
+                if (folderButton) { folderButton.isEnabled = false; }
             } else if (getNativeSaveTag() === PREVIEW_PICKER_TAG || await hasDocumentsPermission()) {
                 infoText.text = "ПАПКА ДОКУМЕНТЫ ПОДКЛЮЧЕНА\nMy Games\\Side ECHO\\savegame.json\nПуть запомнен для следующих запусков.";
-                if (folderButton) folderButton.isEnabled = true;
+                if (folderButton) { folderButton.isEnabled = true; }
             } else if (projectRootHandle) {
                 infoText.text = "В Preview требуется повторно разрешить доступ к Документам.\nПуть выбирать заново не нужно.";
-                if (folderButton) folderButton.isEnabled = true;
+                if (folderButton) { folderButton.isEnabled = true; }
             } else {
                 infoText.text = "В Preview один раз выбери папку «Документы».\nВ ней игра создаст My Games\\Side ECHO\\savegame.json.";
-                if (folderButton) folderButton.isEnabled = true;
+                if (folderButton) { folderButton.isEnabled = true; }
             }
             if (saveFolderProblem) infoText.text += `\n${saveFolderProblem}`;
         }
@@ -415,7 +376,6 @@ runOnStartup(runtime => {
         });
         folderButton?.addEventListener("click", () => {
             if (hasDesktopDocuments()) return;
-            // Запрашиваем доступ из прямого действия пользователя.
             const request = requestDocumentsFromClick({forcePicker: !projectRootHandle});
             void request.then(async () => {
                 saveFolderProblem = "";
@@ -435,9 +395,6 @@ runOnStartup(runtime => {
             newButton.isEnabled = false;
             continueButton.isEnabled = false;
             newGameSaveWarning = "";
-            // Permissions must be requested directly in the click handler.
-            // A missing save, failed picker or inaccessible directory MUST NOT
-            // prevent starting a new game. Saving will report errors separately.
             const request = requestDocumentsFromClick();
             void request.then(() => storageOperation(deleteCheckpoint))
                 .catch(e => {
@@ -473,8 +430,6 @@ runOnStartup(runtime => {
         cleanup = () => {};
     });
 
-    // Инициализация должна происходить КАЖДЫЙ раз при входе в игровой макет,
-    // а не один раз на startup: иначе после возврата из меню кнопки не работают.
     runtime.addEventListener("beforeanylayoutstart", async ({layout}) => {
         if (layout.name !== MENU_LAYOUT && layout.name !== GAME_LAYOUT) return;
         if (layout.name === MENU_LAYOUT) {
@@ -495,7 +450,6 @@ runOnStartup(runtime => {
         const config = await loadGameConfig();
 
         const varManager = runtime.objects.varManager.getFirstInstance();
-        // Проверка сохранения на входе в новый макет, до первого отображения HUD.
         if (restoredSave) {
             for (const name of VAR_NAMES) {
                 if (Object.hasOwn(restoredSave.variables, name)) {
@@ -506,7 +460,6 @@ runOnStartup(runtime => {
         runtime.globalVars.isTransitioning = 0;
         runtime.globalVars.shopOpen = 0;
         runtime.globalVars.roomSelect = restoredSave?.roomSelect === 1 ? 1 : 0;
-        // Не сбрасываем musicStarted: фоновый трек не должен запускаться второй раз.
 
         const energyText = getOne("energyText");
         const energyBar = getOne("energyBar");
@@ -522,7 +475,6 @@ runOnStartup(runtime => {
         const dialogText = getOne("dialogText");
         const dialogTabRadio = getOne("dialogTabRadio");
         const dialogTabDevices = getOne("dialogTabDevices");
-        // Режим рации: три кнопки и список вопросов (третья «вкладка»).
         const askButton = getOne("askButton");
         const transferButton = getOne("transferButton");
         const declineButton = getOne("declineButton");
@@ -531,7 +483,6 @@ runOnStartup(runtime => {
         const cameraObj = getOne("cameraObj");
         if (cameraObj) cameraObj.x = runtime.globalVars.roomSelect === 1 ? 2905 : 935;
 
-        // HUD-кнопки, окно подсказки и конечный экран.
         const hintButton = getOne("hintButton");
         const settingsButton = getOne("settingsButton");
         const saveNoticeText = getOne("saveNoticeText");
@@ -542,13 +493,19 @@ runOnStartup(runtime => {
         const endTempButton = getOne("endTempButton");
         const energySegments = getAll("energySegment").sort((a, b) => a.x - b.x);
 
-        // Настройки
-        const MAX_ENERGY = 15;
+        // ==========================================
+        // НОВЫЕ НАСТРОЙКИ ЭНЕРГИИ
+        // ==========================================
+        const MAX_ENERGY = 10;             // Максимум 10 слотов
         const CURRENCY_LABEL = "ТАЛОНЫ";
         const COFFEE_PRICE = 3;
-        const COFFEE_RESTORE = MAX_ENERGY;
+        const COFFEE_RESTORE = 3;          // Кофе восстанавливает только 3
         const CATFOOD_PRICE = 2;
         const CATFOOD_MAX = 5;
+        const energyCosts = [2, 1, 1];     // Третья кнопка стоит 2 энергии
+        
+        // Флаг для предотвращения повторного вызова геймовера
+        let isGameOver = false; 
 
         let lastDisplayedEnergy = NaN;
         let lastDisplayedCredits = NaN;
@@ -557,9 +514,6 @@ runOnStartup(runtime => {
         const creditsBaseColor = new Map();
         creditsTexts.forEach(t => creditsBaseColor.set(t, [...t.colorRgb]));
 
-        // ------------------------------------------------------------
-        // ЛОГИКА UI
-        // ------------------------------------------------------------
         function updateEnergyUI() {
             const energy = varManager.instVars.Energy;
             if (energy === lastDisplayedEnergy) return;
@@ -576,7 +530,6 @@ runOnStartup(runtime => {
                 energyBar.isVisible = ratio > 0;
             }
 
-            // Блокировка кнопок, если энергии нет
             const isOutOfEnergy = energy <= 0;
             energyButtons.forEach(btn => { btn.opacity = isOutOfEnergy ? 0.4 : 1.0; });
         }
@@ -600,11 +553,6 @@ runOnStartup(runtime => {
             }
         }
 
-        // ------------------------------------------------------------
-        // ДИАЛОГОВОЕ ОКНО
-        // ------------------------------------------------------------
-        // Номер звонка. Шаблон надписи берётся из tik.json (texts.radioCall):
-        // последнее число в нём заменяется текущим номером.
         const CALL_TEMPLATE = config.texts?.radioCall ?? "Звонок Nº 1";
         let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1
             ? restoredSave.callNumber : 1;
@@ -613,9 +561,6 @@ runOnStartup(runtime => {
         let currentDevice = Number.isInteger(restoredSave?.dialog?.device)
             ? restoredSave.dialog.device : null;
 
-        // Режимы окна: "radio" (рация), "questions" (рация + список вопросов,
-        // третья «вкладка») и "devices" (приборы). Кнопки рации видны
-        // в первых двух режимах.
         function renderDialog() {
             const radioMode = dialogTab !== "devices";
             if (dialogTabRadio) dialogTabRadio.animationFrame = radioMode ? 1 : 0;
@@ -628,11 +573,6 @@ runOnStartup(runtime => {
             else dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
         }
 
-        // ------------------------------------------------------------
-        // ВОПРОСЫ СОБЕСЕДНИКУ. Тексты лежат в tik.json -> questions.
-        // Каждый вопрос можно задать один раз: после этого он серый и
-        // зачёркнутый. При наведении незаданный вопрос подчёркивается.
-        // ------------------------------------------------------------
         const questions = (Array.isArray(config.questions) && config.questions.length
             ? config.questions
             : ["Какой груз вы доставляете?",
@@ -642,7 +582,6 @@ runOnStartup(runtime => {
         const questionsAsked = questions.map((_, i) => restoredSave?.questionsAsked?.[i] === true);
         let hoveredQuestion = -1;
         questionItems.forEach(item => {
-            // Подчёркивание и зачёркивание делаются BBCode-тегами [u] и [s].
             if ("isBbcodeEnabled" in item) item.isBbcodeEnabled = true;
         });
 
@@ -672,27 +611,20 @@ runOnStartup(runtime => {
             if (i < 0 || questionsAsked[i]) return;
             questionsAsked[i] = true;
             renderQuestions();
-            // Точка интеграции: здесь позже появится ответ собеседника.
             try { globalThis.sideEcho?.onQuestionAsked?.(i, questions[i]); }
             catch (e) { console.error("onQuestionAsked", e); }
         }
 
-        // Для нового звонка: все вопросы снова доступны.
         function resetQuestions() {
             questionsAsked.fill(false);
             hoveredQuestion = -1;
             renderQuestions();
         }
 
-        // Фиксируем отметки завершённого звонка, не сбрасывая видимый чек-лист.
-        // Отметки остаются активными после автосохранения при новом звонке,
-        // а snapshot текущего звонка хранит их для восстановления по «Продолжить».
         function startNextCall() {
             checklistHistory[String(callNumber)] = listMarks.slice();
             callNumber += 1;
             resetQuestions();
-            // Не очищаем listMarks: галочки и крестики должны переживать
-            // переход между звонками и любое сохранение.
             renderListChecks();
             currentDevice = null;
             dialogTab = "radio";
@@ -703,9 +635,6 @@ runOnStartup(runtime => {
         function showDeviceTab() { dialogTab = "devices"; renderDialog(); }
         function showDevice(index) { currentDevice = index; showDeviceTab(); }
 
-        // ------------------------------------------------------------
-        // МАГАЗИН
-        // ------------------------------------------------------------
         const shopButton = getOne("shopButton");
         const shopCloseButton = getOne("shopCloseButton");
         const shopCoffeeBuyButton = getOne("shopCoffeeBuyButton");
@@ -718,8 +647,6 @@ runOnStartup(runtime => {
         const shopParts = SHOP_PART_NAMES.flatMap(getAll);
         const coveredButtons = [...energyButtons, getOne("changeFrameButton")].filter(Boolean);
 
-        // Наличие кофе уже хранилось в старых сохранениях. Для новых файлов
-        // допускаем также явный блок inventory, сохраняя обратную совместимость.
         let coffeeInStock = (typeof restoredSave?.inventory?.coffeeInStock === "boolean"
             ? restoredSave.inventory.coffeeInStock : restoredSave?.coffeeInStock) === true;
         let messageTimer = null;
@@ -732,14 +659,13 @@ runOnStartup(runtime => {
         }
 
         function refreshShopTexts() {
-            if (shopCoffeeText) shopCoffeeText.text = `Кофе (цена: ${COFFEE_PRICE})${coffeeInStock ? " — куплен" : ""}\nВосстанавливает энергию`;
+            if (shopCoffeeText) shopCoffeeText.text = `Кофе (цена: ${COFFEE_PRICE})${coffeeInStock ? " — куплен" : ""}\nВосстанавливает 3 энергии`;
             if (shopCatFoodText) shopCatFoodText.text = `Кошачий корм (цена: ${CATFOOD_PRICE})\nЗапас: ${varManager.instVars.CatFood}/${CATFOOD_MAX}`;
         }
 
         function openShop() {
             if (runtime.globalVars.shopOpen === 1) return;
-            runtime.globalVars.shopOpen = 1; // Меняем глобальную переменную Construct 3
-            
+            runtime.globalVars.shopOpen = 1; 
             coveredButtons.forEach(b => { b.isVisible = false; });
             if (coffeeButton) coffeeButton.isVisible = false;
             shopParts.forEach(p => { p.isVisible = true; });
@@ -749,17 +675,12 @@ runOnStartup(runtime => {
 
         function closeShop() {
             if (runtime.globalVars.shopOpen === 0) return;
-            runtime.globalVars.shopOpen = 0; // Меняем глобальную переменную Construct 3
-            
+            runtime.globalVars.shopOpen = 0; 
             shopParts.forEach(p => { p.isVisible = false; });
             coveredButtons.forEach(b => { b.isVisible = true; });
             if (coffeeButton) coffeeButton.isVisible = coffeeInStock;
         }
 
-        // ------------------------------------------------------------
-        // HUD-КНОПКИ, ПОДСКАЗКА И КОНЕЧНЫЙ ЭКРАН
-        // ------------------------------------------------------------
-        // Макет реального стартового меню. Возврат не создает сохранение.
         const endText = {
             title: config.end?.title ?? "ИТОГИ СМЕНЫ",
             arrived: config.end?.arrived ?? "Курьеров дошло",
@@ -769,7 +690,6 @@ runOnStartup(runtime => {
             energySpent: config.end?.energySpent ?? "Энергии потрачено"
         };
 
-        // Поля конечного экрана: объект -> что показывать (переменная varManager).
         const endFields = [
             ["endArrivedText", endText.arrived, "CouriersArrived"],
             ["endLostText", endText.lost, "CouriersLost"],
@@ -783,10 +703,6 @@ runOnStartup(runtime => {
         const endParts = ["endPanel", "endTitleText", "endArrivedText", "endLostText",
                           "endZonesText", "endEchoText", "endEnergyText", "endMenuButton"].flatMap(getAll);
 
-        // HUD-кнопки и окна привязаны к ВИДИМОЙ области экрана, а не к
-        // точке cameraObj: макет ограничен по краям (прокрутка не выходит за
-        // его границы), поэтому реальный центр экрана может отличаться от
-        // cameraObj.x. Раскладка рисовалась вокруг центра (935, 540).
         const DESIGN_CX = 935;
         const DESIGN_CY = 540;
         const hudButtons = [hintButton, settingsButton, saveNoticeText].filter(Boolean);
@@ -796,13 +712,11 @@ runOnStartup(runtime => {
         );
         const fullscreenPanels = new Set([...getAll("hintPanel"), ...getAll("endPanel")]);
 
-        // Видимая область слоя в координатах слоя: центр и размер.
         function viewRect(layer) {
             try {
                 const vp = layer.getViewport();
                 return { cx: vp.left + vp.width / 2, cy: vp.top + vp.height / 2, w: vp.width, h: vp.height };
             } catch (e) {
-                // Запасной вариант: центр камеры, зажатый в границы макета.
                 const hw = 960, hh = 540;
                 const cx = cameraObj ? cameraObj.x : DESIGN_CX;
                 const cy = cameraObj ? cameraObj.y : DESIGN_CY;
@@ -814,15 +728,13 @@ runOnStartup(runtime => {
             }
         }
 
-        // HTML-кнопки рисуются поверх всего, поэтому пока открыт полноэкранный
-        // экран, прячем их и потом возвращаем в прежнее состояние.
         const gameDomButtons = [
             ...energyButtons, getOne("changeFrameButton"), coffeeButton, shopButton,
             shopCloseButton, shopCoffeeBuyButton, shopCatFoodBuyButton,
             hintButton, settingsButton, endTempButton, ...radioButtons
         ].filter(Boolean);
         const savedDomVisibility = new Map();
-        let overlay = null; // null | "hint" | "end"
+        let overlay = null;
 
         function openOverlay(kind, parts) {
             if (overlay || runtime.globalVars.isTransitioning === 1) return false;
@@ -853,7 +765,7 @@ runOnStartup(runtime => {
             overlay = null;
         }
 
-        const playClick = () => { try { runtime.callFunction("PlayClick"); } catch (e) { /* функции нет — без звука */ } };
+        const playClick = () => { try { runtime.callFunction("PlayClick"); } catch (e) { } };
 
         function goToStartMenu() {
             runtime.goToLayout(MENU_LAYOUT);
@@ -871,7 +783,6 @@ runOnStartup(runtime => {
         }
         const closeEndScreen = () => closeOverlay("end", endParts);
 
-        // Скрыто до открытия.
         hintParts.forEach(p => { p.isVisible = false; });
         endParts.forEach(p => { p.isVisible = false; });
 
@@ -882,11 +793,6 @@ runOnStartup(runtime => {
         });
         if (hintCloseButton) hintCloseButton.addEventListener("click", () => { playClick(); closeHint(); });
 
-        // Кнопки рации. «Задать вопрос» открывает/закрывает список вопросов.
-        // «Передать координаты» и «Отклонить» завершают звонок и начинают
-        // следующий. Чтобы учесть решение игрока, подпишитесь:
-        // globalThis.sideEcho.onDecision = (kind, callNumber) => {...}
-        // (kind: "transfer" | "decline"; вызывается ДО начала следующего звонка).
         const radioClickAllowed = () =>
             runtime.globalVars.isTransitioning !== 1 && runtime.globalVars.shopOpen !== 1 && !overlay;
         if (askButton) askButton.addEventListener("click", () => {
@@ -907,9 +813,6 @@ runOnStartup(runtime => {
             });
         }
 
-        // «Настройки»: сначала сохраняем игру, и только после успешной записи
-        // уходим в главное меню. Если сохранить не удалось, остаёмся в игре
-        // и показываем «ОШИБКА СОХРАНЕНИЯ», чтобы прогресс не потерялся молча.
         let leavingToMenu = false;
         if (settingsButton) settingsButton.addEventListener("click", async () => {
             if (leavingToMenu || overlay || runtime.globalVars.isTransitioning === 1) return;
@@ -925,7 +828,6 @@ runOnStartup(runtime => {
             }
         });
 
-        // Временный выход на конечный экран — во второй комнате.
         if (endTempButton) endTempButton.addEventListener("click", () => {
             if (overlay || runtime.globalVars.isTransitioning === 1) return;
             playClick();
@@ -936,19 +838,14 @@ runOnStartup(runtime => {
             goToStartMenu();
         });
 
-        // ------------------------------------------------------------
-        // TICK (Обновление UI)
-        // ------------------------------------------------------------
         let lastHudX = NaN;
         let lastHudY = NaN;
-        // Подсказка открывается при старте игры (новая игра).
-        // Ждём пару кадров, чтобы камера и видимая область уже встали на место.
         const SHOW_HINT_ON_NEW_GAME = true;
         const SHOW_HINT_ON_CONTINUE = false;
         let startHintTicks = (restoredSave ? SHOW_HINT_ON_CONTINUE : SHOW_HINT_ON_NEW_GAME) ? 2 : 0;
+        
         onRuntime("tick2", () => {
             if (startHintTicks > 0 && --startHintTicks === 0) {
-                // Если переход ещё идёт, попробуем на следующем кадре.
                 if (!overlay && (runtime.globalVars.isTransitioning === 1 || !openHint())) startHintTicks = 1;
             }
             if (saveNoticeText?.isVisible) {
@@ -956,8 +853,6 @@ runOnStartup(runtime => {
                 if (remaining <= 0) saveNoticeText.isVisible = false;
                 else saveNoticeText.opacity = Math.min(1, remaining / 550);
             }
-            // One viewport query per frame instead of one per HUD button, and
-            // no position writes when the camera has not moved.
             if (hudButtons.length) {
                 const view = viewRect(hudButtons[0].layer);
                 if (view.cx !== lastHudX || view.cy !== lastHudY) {
@@ -970,17 +865,17 @@ runOnStartup(runtime => {
                     }
                 }
             }
-            // Движок/события не должны сбрасывать крестики после загрузки.
             if (listPanel?.isVisible) renderListChecks();
             if (varManager.instVars.Energy !== lastDisplayedEnergy) updateEnergyUI();
             if (varManager.instVars.Credits !== lastDisplayedCredits) updateCreditsUI();
+            
+            // Страховка: геймовер если энергия упала до нуля
+            if (varManager.instVars.Energy <= 0 && !isGameOver && !overlay && runtime.globalVars.isTransitioning === 0) {
+                isGameOver = true;
+                openEndScreen();
+            }
         });
 
-        // ------------------------------------------------------------
-        // ОБРАБОТЧИКИ КЛИКОВ
-        // ------------------------------------------------------------
-        
-        // Кнопка магазина (открыть/закрыть)
         if (shopButton) shopButton.addEventListener("click", () => {
             if (runtime.globalVars.isTransitioning === 1) return;
             openShop();
@@ -991,7 +886,6 @@ runOnStartup(runtime => {
             closeShop();
         });
         
-        // Покупка кофе
         if (shopCoffeeBuyButton) shopCoffeeBuyButton.addEventListener("click", () => {
             if (runtime.globalVars.shopOpen === 0) return;
             if (coffeeInStock) { showShopMessage("Кофе уже куплен"); return; }
@@ -1003,7 +897,6 @@ runOnStartup(runtime => {
             void saveCheckpoint("purchase");
         });
 
-        // Покупка корма
         if (shopCatFoodBuyButton) shopCatFoodBuyButton.addEventListener("click", () => {
             if (runtime.globalVars.shopOpen === 0) return;
             if (varManager.instVars.CatFood >= CATFOOD_MAX) { showShopMessage("Запас корма полон"); return; }
@@ -1015,7 +908,6 @@ runOnStartup(runtime => {
             void saveCheckpoint("purchase");
         });
 
-        // Закрытие магазина на Esc
         onRuntime("keydown", (e) => { 
             if (e.key !== "Escape") return;
             if (overlay === "hint") { closeHint(); return; }
@@ -1025,7 +917,6 @@ runOnStartup(runtime => {
         
         shopParts.forEach(p => { p.isVisible = false; });
 
-        // Кнопка выпить кофе
         if (coffeeButton) {
             coffeeButton.isVisible = coffeeInStock;
             coffeeButton.addEventListener("click", () => {
@@ -1038,41 +929,54 @@ runOnStartup(runtime => {
             });
         }
 
-        // Кнопки приборов (энергии)
+        // ==========================================
+        // НОВАЯ ЛОГИКА КНОПОК ЭНЕРГИИ
+        // ==========================================
         energyButtons.forEach((button, index) => {
             button.addEventListener("click", () => {
+                if (isGameOver) return;
                 if (runtime.globalVars.isTransitioning === 1) return;
                 if (runtime.globalVars.shopOpen === 1) return;
                 
-                // Проверка энергии
-                if (varManager.instVars.Energy <= 0) {
+                const cost = energyCosts[index] || 1;
+                
+                if (varManager.instVars.Energy < cost) {
                     if (dialogText) {
                         dialogTab = "devices";
                         renderDialog();
-                        dialogText.text = "Недостаточно энергии.";
+                        dialogText.text = `Недостаточно энергии. (Требуется: ${cost})`;
                     }
                     return;
                 }
+                
                 showDevice(index);
-                varManager.instVars.Energy -= 1;
-                varManager.instVars.EnergySpent += 1; // для конечного экрана
+                varManager.instVars.Energy -= cost;
+                varManager.instVars.EnergySpent += cost; 
                 updateEnergyUI();
+                
+                // МГНОВЕННЫЙ ГЕЙМОВЕР ПРИ 0 ЭНЕРГИИ
+                if (varManager.instVars.Energy <= 0) {
+                    varManager.instVars.Energy = 0;
+                    updateEnergyUI();
+                    isGameOver = true;
+                    
+                    setTimeout(() => {
+                        if (dialogText) dialogText.text = "ЭНЕРГИЯ ИСЧЕРПАНА. СВЯЗЬ ПРЕРВАНА...";
+                        openEndScreen();
+                    }, 600);
+                }
             });
         });
 
-        // ------------------------------------------------------------
-        // СПИСОК И ВКЛАДКИ
-        // ------------------------------------------------------------
         const listButton = getOne("listButton");
         const listPanel = getOne("listPanel");
         const listCloseButton = getOne("listCloseButton");
-        // Чек-лист: 5 строк текста и две колонки клеток — «галочка» и «крестик».
         const listRowTexts = getAll("listRowText").sort((a, b) => a.y - b.y);
         const listCheckCells = getAll("listCheckCell").sort((a, b) => a.y - b.y);
         const listCrossCells = getAll("listCrossCell").sort((a, b) => a.y - b.y);
         const listParts = [...listRowTexts, ...listCheckCells, ...listCrossCells];
         const setListParts = (visible) => listParts.forEach(p => { p.isVisible = visible; });
-        // Тексты пунктов лежат в tik.json -> checklist.
+        
         const checklistTexts = Array.isArray(config.checklist) && config.checklist.length
             ? config.checklist
             : ["Есть в списке ожидаемых?", "Совпадают ли данные (частота, груз, маршрут)?",
@@ -1081,10 +985,6 @@ runOnStartup(runtime => {
 
         if (listPanel) listPanel.isVisible = false;
         if (listCloseButton) listCloseButton.isVisible = false;
-        // Отметки по строкам: 0 — нет, 1 — галочка, 2 — крестик.
-        // Для старых savegame.json без истории берём прежнее поле listMarks.
-        // История привязана к номеру звонка, чтобы сброс на новом звонке
-        // не стирал заметки предыдущих звонков из файла сохранения.
         const checklistHistory = Object.create(null);
         const savedHistory = restoredSave?.checklistHistory;
         if (savedHistory && typeof savedHistory === "object" && !Array.isArray(savedHistory)) {
@@ -1102,7 +1002,6 @@ runOnStartup(runtime => {
             return saved === 1 || saved === 2 ? saved : 0;
         });
         function renderListChecks() {
-            // Клетки не должны сами листать кадры: 0 — пустая, 1 — отмеченная.
             const setFrame = (cell, target) => {
                 cell.animationSpeed = 0;
                 cell.stopAnimation();
@@ -1116,19 +1015,12 @@ runOnStartup(runtime => {
         renderListChecks();
         setListParts(false);
 
-        // Счётчик отличает даже две быстрые покупки с одинаковым savedAt.
-        // Старые сохранения без revision остаются совместимыми.
         let saveRevision = Number.isSafeInteger(restoredSave?.revision) && restoredSave.revision >= 0
             ? restoredSave.revision : 0;
 
-        // Snapshot копируется непосредственно в момент контрольной точки, а не
-        // после завершения асинхронной записи (иначе могли бы попасть новые действия).
         function makeCheckpoint() {
             const variables = {};
             for (const name of VAR_NAMES) variables[name] = varManager.instVars[name];
-            // В snapshot попадают и актуальные отметки, и завершённые звонки.
-            // Не передаём ссылки на живые массивы: следующая смена звонка
-            // или клик по чекбоксу не должны менять уже созданный snapshot.
             const currentMarks = listMarks.slice();
             const allCallMarks = Object.fromEntries(
                 Object.entries(checklistHistory).map(([call, marks]) => [call, marks.slice()]));
@@ -1139,8 +1031,6 @@ runOnStartup(runtime => {
                 savedAt: new Date().toISOString(),
                 variables,
                 roomSelect: runtime.globalVars.roomSelect === 1 ? 1 : 0,
-                // Сохраняем старое поле + явный перечень купленных предметов.
-                // CatFood уже учтён в variables и не теряется при загрузке.
                 coffeeInStock,
                 inventory: {
                     coffeeInStock,
@@ -1161,7 +1051,6 @@ runOnStartup(runtime => {
             saveNoticeText.opacity = 1;
             saveNoticeText.isVisible = true;
             saveNoticeExpires = Date.now() + 3500;
-            // Корректная позиция даже если покупка сделана сразу после смены комнаты.
             const view = viewRect(saveNoticeText.layer);
             const off = followOffsets.get(saveNoticeText);
             if (off) { saveNoticeText.x = view.cx + off.dx; saveNoticeText.y = view.cy + off.dy; }
@@ -1171,13 +1060,10 @@ runOnStartup(runtime => {
             newGameSaveWarning = "";
         }
 
-        // Возвращает Promise<boolean>: true — файл записан и проверен на диске.
         function saveCheckpoint(reason) {
             if (reason !== "purchase" && reason !== "new-call" && reason !== "settings") {
                 return Promise.resolve(false);
             }
-            // Снимок на момент покупки, ДО асинхронной записи. Последующие
-            // клики/расход энергии не включаются в уже созданный checkpoint.
             const snapshot = makeCheckpoint();
             return storageOperation(() => writeCheckpoint(snapshot))
                 .then(() => {
@@ -1194,11 +1080,6 @@ runOnStartup(runtime => {
                 });
         }
 
-        // Новый звонок начинается кнопками «Передать координаты» / «Отклонить»
-        // или вызовом sideEcho.onNewCall() из других систем: оба пути ведут в
-        // startNextCall(), который и сохраняет контрольную точку.
-        // Открытие вкладки радио само по себе сохранение НЕ вызывает.
-
         function isPointerOver(instance, clientX, clientY) {
             if (!instance) return false;
             const [lx, ly] = instance.layer.cssPxToLayer(clientX, clientY);
@@ -1213,7 +1094,7 @@ runOnStartup(runtime => {
             if (e.pointerType === "mouse" && e.button !== 0) return;
             if (runtime.globalVars.isTransitioning === 1) return;
             if (runtime.globalVars.shopOpen === 1) return;
-            if (overlay) return;
+            if (overlay || isGameOver) return;
 
             if (isPointerOver(listButton, e.clientX, e.clientY)) {
                 const expanded = !listPanel.isVisible;
@@ -1224,7 +1105,6 @@ runOnStartup(runtime => {
                 return;
             }
 
-            // Окно диалога: вкладки и список вопросов (чек-лист его не перекрывает).
             if (isPointerOver(dialogTabRadio, e.clientX, e.clientY)) {
                 if (dialogTab !== "radio") { dialogTab = "radio"; hoveredQuestion = -1; renderDialog(); }
                 return;
@@ -1245,8 +1125,6 @@ runOnStartup(runtime => {
                 return;
             }
 
-            // Клик по клетке: колонка «галочка» ставит 1, колонка «крестик» — 2;
-            // повторный клик по той же клетке снимает отметку.
             for (let i = 0; i < listMarks.length; i++) {
                 if (isPointerOver(listCheckCells[i], e.clientX, e.clientY)) {
                     listMarks[i] = listMarks[i] === 1 ? 0 : 1;
@@ -1260,9 +1138,9 @@ runOnStartup(runtime => {
                 }
             }
         });
-        // Наведение на вопрос: незаданный вопрос подчёркивается.
+        
         onRuntime("pointermove", (e) => {
-            if (dialogTab !== "questions" || overlay || runtime.globalVars.shopOpen === 1) return;
+            if (dialogTab !== "questions" || overlay || runtime.globalVars.shopOpen === 1 || isGameOver) return;
             const idx = questionAt(e.clientX, e.clientY);
             const hovered = idx >= 0 && !questionsAsked[idx] ? idx : -1;
             if (hovered === hoveredQuestion) return;
@@ -1270,26 +1148,20 @@ runOnStartup(runtime => {
             renderQuestions();
         });
 
-        // ------------------------------------------------------------
-        // Инициализация
-        // ------------------------------------------------------------
         updateEnergyUI();
         updateCreditsUI();
         refreshShopTexts();
         renderDialog();
-        // Экспорт данных для Event Sheet (если понадобится)
+        
         globalThis.sideEcho = { 
             config: config,
             addCredits: (amt) => { varManager.instVars.Credits += amt; updateCreditsUI(); }, 
             spendCredits: (amt) => { varManager.instVars.Credits -= amt; updateCreditsUI(); }, 
             openShop, closeShop, openHint, closeHint, openEndScreen,
-            // Статистика для конечного экрана: addStat("CouriersArrived") и т.д.
             addStat: (name, amt = 1) => { if (name in varManager.instVars) varManager.instVars[name] += amt; },
             onNewCall: startNextCall,
             getCallNumber: () => callNumber,
-            // Вопросы к собеседнику: списки и сброс для нового звонка.
             questions: { list: questions, asked: questionsAsked, reset: resetQuestions },
-            // Подписки: onQuestionAsked(index, text), onDecision("transfer"|"decline").
             onQuestionAsked: null,
             onDecision: null,
         };

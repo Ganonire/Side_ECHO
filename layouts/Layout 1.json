@@ -449,7 +449,7 @@
 					"sid": 636364914016915,
 					"tags": "",
 					"instanceVariables": {
-						"Energy": 15,
+						"Energy": 10,
 						"roomSelect": false,
 						"Credits": 5,
 						"CatFood": 0,
@@ -3340,7 +3340,7 @@
 						"type": "button",
 						"text": "Конец (временно)",
 						"tooltip": "",
-						"initially-visible": true,
+						"initially-visible": false,
 						"enabled": true,
 						"auto-font-size": true,
 						"checked": false,
