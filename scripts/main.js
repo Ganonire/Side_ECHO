@@ -584,10 +584,12 @@ runOnStartup(runtime => {
 
         const questions = (Array.isArray(config.questions) && config.questions.length
             ? config.questions
-            : ["Какой груз вы доставляете?",
+            : ["Назовите вашу кодовую фразу", // <-- НОВЫЙ ВОПРОС
+               "Какой груз вы доставляете?",
                "Какие погодные условия в вашем районе?",
                "В какой местности вы сейчас находитесь?"]
         ).slice(0, questionItems.length);
+        
         const questionsAsked = questions.map((_, i) => restoredSave?.questionsAsked?.[i] === true);
         let hoveredQuestion = -1;
         questionItems.forEach(item => {
