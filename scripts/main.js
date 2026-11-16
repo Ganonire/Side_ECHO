@@ -506,7 +506,11 @@ runOnStartup(runtime => {
         const COFFEE_RESTORE = 3;          
         const CATFOOD_PRICE = 2;
         const CATFOOD_MAX = 5;
-        const energyCosts = [2, 1, 1];     
+        const energyCosts = [2, 1, 1];   
+
+        const DEVICE_NAMES = Array.isArray(config.devices) && config.devices.length
+            ? config.devices
+            : ["Анализатор шума", "Анализатор голоса", "Определитель погоды"];  
         
         let isGameOver = false; 
         
@@ -562,7 +566,7 @@ runOnStartup(runtime => {
             }
         }
 
-        const CALL_TEMPLATE = config.texts?.radioCall ?? "Звонок Nº 1";
+        const CALL_TEMPLATE = config.texts?.radioCall ?? "Сигнал частоты 000.0";
         let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1
             ? restoredSave.callNumber : 1;
         const callText = () => CALL_TEMPLATE.replace(/\d+\s*$/, String(callNumber));
@@ -577,6 +581,7 @@ runOnStartup(runtime => {
         // показывает результат, ничего не списывая. Новый звонок («Передать
         // координаты» / «Отклонить») снова открывает все приборы.
         const devicesUsed = energyButtons.map((_, i) => restoredSave?.devicesUsed?.[i] === true);
+        
         function renderDeviceButtons() {
             const outOfEnergy = varManager.instVars.Energy <= 0;
             // Использованный прибор и отсутствие энергии отображаются приглушённо.
@@ -586,7 +591,7 @@ runOnStartup(runtime => {
         }
 
         function renderDialog() {
-            const radioMode   = dialogTab === "radio";
+            const radioMode = dialogTab === "radio" || dialogTab === "questions";
             const devicesMode = dialogTab === "devices";
             const mailMode    = dialogTab === "mail";
             
@@ -596,8 +601,15 @@ runOnStartup(runtime => {
             renderQuestions();
             if (!dialogText) return;
             if (radioMode)        dialogText.text = callText();
-            else if (devicesMode) dialogText.text = currentDevice === null ? "Приборы: ..." : `Прибор ${currentDevice}: ...`;
-            else                  dialogText.text = "Почта: ...";   // <-- заглушка для mail
+            else if (devicesMode) {
+                if (currentDevice === null) {
+                    dialogText.text = "Приборы:\n" + DEVICE_NAMES.map((n, i) => `${i + 1}. ${n}`).join("\n");
+                } else {
+                    const deviceName = DEVICE_NAMES[currentDevice] ?? `Прибор ${currentDevice + 1}`;
+                    dialogText.text = `${deviceName}: ...`;
+                }
+            }
+            else                  dialogText.text = "Список ожидаемых: ...";   // <-- заглушка для mail
 }
 
         const questions = (Array.isArray(config.questions) && config.questions.length
@@ -902,8 +914,13 @@ runOnStartup(runtime => {
             playClick();
             openEndScreen();
         });
-        if (endMenuButton) endMenuButton.addEventListener("click", () => {
+        if (endMenuButton) endMenuButton.addEventListener("click", async () => {
             playClick();
+            try {
+                await storageOperation(deleteCheckpoint);
+            } catch (e) {
+                console.warn("Не удалось удалить сохранение при выходе в меню", e);
+            }
             goToStartMenu();
         });
 
@@ -1198,6 +1215,15 @@ runOnStartup(runtime => {
             }
             if (isPointerOver(dialogTabDevices, e.clientX, e.clientY)) {
                 if (dialogTab !== "devices") { dialogTab = "devices"; hoveredQuestion = -1; renderDialog(); }
+                return;
+            }
+
+            if (isPointerOver(dialogTabMail, e.clientX, e.clientY)) {
+                if (dialogTab !== "mail") {
+                    dialogTab = "mail";
+                    hoveredQuestion = -1;
+                    renderDialog();
+                }
                 return;
             }
             const clickedQuestion = questionAt(e.clientX, e.clientY);
