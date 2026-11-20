@@ -1,6 +1,6 @@
 {
 	"projectFormatVersion": 1,
-	"savedWithRelease": 50603,
+	"savedWithRelease": 50604,
 	"name": "Raul_echo",
 	"runtime": "c3",
 	"useWorker": "auto",
@@ -9,77 +9,77 @@
 		{
 			"type": "plugin",
 			"id": "Audio",
-			"name": "Аудио",
+			"name": "Audio",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Browser",
-			"name": "Браузер",
+			"name": "Browser",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Button",
-			"name": "Кнопка",
+			"name": "Button",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "FileSystem",
-			"name": "Файловая система",
+			"name": "File system",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Mouse",
-			"name": "Мышь",
+			"name": "Mouse",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Sprite",
-			"name": "Спрайт",
+			"name": "Sprite",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "Text",
-			"name": "Текст",
+			"name": "Text",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "plugin",
 			"id": "TiledBg",
-			"name": "Тайловый фон",
+			"name": "Tiled Background",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "behavior",
 			"id": "Anchor",
-			"name": "Якорь",
+			"name": "Anchor",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "behavior",
 			"id": "Tween",
-			"name": "Твин-анимация",
+			"name": "Tween",
 			"author": "Scirra",
 			"bundled": false
 		},
 		{
 			"type": "behavior",
 			"id": "scrollto",
-			"name": "Следить за",
+			"name": "Scroll To",
 			"author": "Scirra",
 			"bundled": false
 		}
@@ -158,7 +158,8 @@
 			"listCheckCell",
 			"listCrossCell",
 			"menuExitButton",
-			"dialogTabMail"
+			"dialogTabMail",
+			"catFace"
 		],
 		"subfolders": []
 	},
@@ -297,7 +298,7 @@
 				{
 					"name": "tik.json",
 					"type": "application/json",
-					"sid": 505662708499797,
+					"sid": 819273343524207,
 					"file-info": {
 						"purpose": "none"
 					}

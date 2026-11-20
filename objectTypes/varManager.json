@@ -2,7 +2,7 @@
 	"name": "varManager",
 	"plugin-id": "Sprite",
 	"sid": 319485459022013,
-	"isGlobal": false,
+	"isGlobal": true,
 	"editorNewInstanceIsReplica": true,
 	"instanceVariables": [
 		{
