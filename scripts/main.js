@@ -1,5 +1,5 @@
 // ================================================================
-// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС МАГАЗИНА И СЕЙВОВ)
+// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС МАСШТАБИРОВАНИЯ И СЕЙВОВ)
 // ================================================================
 
 runOnStartup((runtime) => {
@@ -992,7 +992,6 @@ runOnStartup((runtime) => {
       followParts.map((o) => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }]),
     );
     
-    // ФОН МАГАЗИНА УБРАН ИЗ FULLSCREEN, ОН БУДЕТ МАСШТАБИРОВАТЬСЯ ВРУЧНУЮ
     const fullscreenPanels = new Set([
       ...getAll("hintPanel"),
       ...getAll("endPanel"),
@@ -1001,8 +1000,8 @@ runOnStartup((runtime) => {
     const baseSizes = new Map();
     shopParts.forEach((p) => {
       baseSizes.set(p, {
-        dx: p.x - DESIGN_CX,
-        dy: p.y - DESIGN_CY,
+        x: p.x,
+        y: p.y,
         w: p.width,
         h: p.height,
         fontSize: typeof p.fontSize === "number" ? p.fontSize : null,
@@ -1033,14 +1032,19 @@ runOnStartup((runtime) => {
     function centerPartsOnScreen(parts) {
       const cachedViews = new Map();
       
-      // Вычисляем масштаб для магазина на основе его фоновой панели
-      let shopScaleX = 1, shopScaleY = 1;
       const shopPanel = getOne("shopPanel");
-      if (runtime.globalVars.shopOpen === 1 && shopPanel && baseSizes.has(shopPanel)) {
+      const isShopOpen = runtime.globalVars.shopOpen === 1;
+      
+      let shopScaleX = 1, shopScaleY = 1;
+      let basePanelX = 0, basePanelY = 0;
+
+      if (isShopOpen && shopPanel && baseSizes.has(shopPanel)) {
         const view = viewRect(shopPanel.layer);
-        const base = baseSizes.get(shopPanel);
-        shopScaleX = view.w / base.w;
-        shopScaleY = view.h / base.h;
+        const basePanel = baseSizes.get(shopPanel);
+        shopScaleX = view.w / basePanel.w;
+        shopScaleY = view.h / basePanel.h;
+        basePanelX = basePanel.x;
+        basePanelY = basePanel.y;
       }
 
       parts.forEach((p) => {
@@ -1057,18 +1061,29 @@ runOnStartup((runtime) => {
           p.y = view.cy;
           p.width = view.w + 4;
           p.height = view.h + 4;
-        } else if (runtime.globalVars.shopOpen === 1 && baseSizes.has(p)) {
-          // ДЛЯ ВСЕХ ЭЛЕМЕНТОВ МАГАЗИНА: масштабируем пропорционально фону
+        } else if (isShopOpen && baseSizes.has(p)) {
+          // ДЛЯ ВСЕХ ЭЛЕМЕНТОВ МАГАЗИНА: масштабируем пропорционально
           const base = baseSizes.get(p);
           
-          p.x = view.cx + base.dx * shopScaleX;
-          p.y = view.cy + base.dy * shopScaleY;
-          
-          p.width = base.w * shopScaleX;
-          p.height = base.h * shopScaleY;
-          
-          if (base.fontSize) {
-            p.fontSize = Math.max(1, base.fontSize * Math.min(shopScaleX, shopScaleY));
+          if (p === shopPanel) {
+            // Сам фон на весь экран
+            p.x = view.cx;
+            p.y = view.cy;
+            p.width = view.w;
+            p.height = view.h;
+          } else {
+            // Остальные элементы масштабируются относительно центра фона
+            const relX = base.x - basePanelX;
+            const relY = base.y - basePanelY;
+            
+            p.x = view.cx + relX * shopScaleX;
+            p.y = view.cy + relY * shopScaleY;
+            p.width = base.w * shopScaleX;
+            p.height = base.h * shopScaleY;
+            
+            if (base.fontSize) {
+              p.fontSize = Math.max(1, base.fontSize * Math.min(shopScaleX, shopScaleY));
+            }
           }
         } else if (off) {
           // Для остального HUD
