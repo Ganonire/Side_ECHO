@@ -368,28 +368,45 @@ runOnStartup((runtime) => {
     const exitButton = get("menuExitButton");
     const folderButton = get("settingsPickSaveFolderButton");
     const infoText = get("settingsInfoText");
+    const titleText = get("menuTitleText");
+
     let checkpoint = null;
     let opening = false;
-    loreButton.isEnabled = false;
-    continueButton.isEnabled = false;
-    settingsButton.isEnabled = true;
+
+    // Кнопки должны быть доступны сразу: чтение сохранения и IndexedDB
+    // выполняются в фоне и не задерживают запуск StartMenu.
+    if (continueButton) continueButton.isEnabled = false;
+    if (settingsButton) settingsButton.isEnabled = true;
+    if (newButton) newButton.isEnabled = true;
+    if (loreButton) loreButton.isEnabled = true;
+    if (exitButton) exitButton.isEnabled = true;
+
     const menuButtons = [
       newButton,
       continueButton,
       settingsButton,
       loreButton,
       exitButton,
-      get("menuTitleText"),
+      titleText,
     ].filter(Boolean);
-    const settingsUI = createSettingsController({
-      beforeOpen: () => {
-        menuButtons.forEach((o) => (o.isVisible = false));
-        return true;
-      },
-      afterClose: () => {
-        menuButtons.forEach((o) => (o.isVisible = true));
-      },
-    });
+
+    let settingsUI;
+    try {
+      settingsUI = createSettingsController({
+        beforeOpen: () => {
+          menuButtons.forEach((o) => (o.isVisible = false));
+          return true;
+        },
+        afterClose: () => {
+          menuButtons.forEach((o) => (o.isVisible = true));
+        },
+      });
+    } catch (e) {
+      console.error("SIDE ECHO: не удалось создать окно настроек", e);
+      settingsUI = { open: () => {
+        if (titleText) titleText.text = "ОШИБКА ОКНА НАСТРОЕК";
+      }, close: () => {} };
+    }
 
     async function updateFolderInfo() {
       if (!infoText) return;
@@ -400,68 +417,54 @@ runOnStartup((runtime) => {
           folderButton.isVisible = false;
         }
       } else if (!supportsPreviewDocuments()) {
-        infoText.text = "Недоступна запись.";
-        if (folderButton) {
-          folderButton.isEnabled = false;
-        }
+        infoText.text = "Запись в папку недоступна в этом режиме.";
+        if (folderButton) folderButton.isEnabled = false;
       } else if (
         getNativeSaveTag() === PREVIEW_PICKER_TAG ||
         (await hasDocumentsPermission())
       ) {
         infoText.text = `ПАПКА ПОДКЛЮЧЕНА\n${SAVE_FILENAME}`;
-        if (folderButton) {
-          folderButton.isEnabled = true;
-        }
+        if (folderButton) folderButton.isEnabled = true;
       } else {
         infoText.text = "В Preview один раз выбери папку для сохранений.";
-        if (folderButton) {
-          folderButton.isEnabled = true;
-        }
+        if (folderButton) folderButton.isEnabled = true;
       }
       if (saveFolderProblem) infoText.text += `\n${saveFolderProblem}`;
     }
+
     async function refreshCheckpoint() {
       try {
         checkpoint = await readCheckpoint();
       } catch (e) {
         checkpoint = null;
+        console.warn("SIDE ECHO: не удалось прочитать сохранение", e);
       }
-      continueButton.isEnabled = !!checkpoint;
+      if (continueButton) continueButton.isEnabled = !!checkpoint;
       await updateFolderInfo();
     }
 
-    await queuedStorage.catch(() => {});
-    if (
-      !hasDesktopDocuments() &&
-      !hasPluginPreviewDocuments() &&
-      typeof indexedDB !== "undefined"
-    ) {
-      try {
-        projectRootHandle = await getRememberedDocuments();
-      } catch (e) {}
-    }
-    await refreshCheckpoint();
-
+    // Обработчики назначаются до любых await, чтобы меню не зависело от
+    // доступности файловой системы, IndexedDB или разрешения на папку.
     settingsButton?.addEventListener("click", () => {
+      if (opening) return;
       settingsUI.open();
       if (hasDesktopDocuments() && folderButton) folderButton.isVisible = false;
-      void updateFolderInfo();
+      void updateFolderInfo().catch((e) => console.warn("SIDE ECHO: настройки папки", e));
     });
+
     folderButton?.addEventListener("click", () => {
       if (hasDesktopDocuments()) return;
-      const request = requestDocumentsFromClick({
-        forcePicker: !projectRootHandle,
-      });
-      void request
+      void requestDocumentsFromClick({ forcePicker: !projectRootHandle })
         .then(async () => {
           saveFolderProblem = "";
           await refreshCheckpoint();
         })
         .catch(async (e) => {
-          saveFolderProblem = e.message || String(e);
+          saveFolderProblem = e?.message || String(e);
           await updateFolderInfo();
         });
     });
+
     const menuEscape = (e) => {
       if (e.key === "Escape") settingsUI.close();
     };
@@ -471,41 +474,84 @@ runOnStartup((runtime) => {
     newButton?.addEventListener("click", () => {
       if (opening) return;
       opening = true;
-      newButton.isEnabled = false;
-      continueButton.isEnabled = false;
+      if (newButton) newButton.isEnabled = false;
+      if (continueButton) continueButton.isEnabled = false;
       newGameSaveWarning = "";
-      const request = requestDocumentsFromClick();
-      void request
-        .then(() => storageOperation(deleteCheckpoint))
-        .catch((e) => {
+
+      void (async () => {
+        try {
+          await requestDocumentsFromClick();
+        } catch (e) {
+          // Отмена выбора папки не должна блокировать запуск новой игры.
+          saveFolderProblem = e?.message || String(e);
+        }
+        try {
+          await storageOperation(deleteCheckpoint);
+        } catch (e) {
           newGameSaveWarning = "НЕ УДАЛОСЬ ОЧИСТИТЬ СОХРАНЕНИЕ";
-        })
-        .then(() => {
-          loadForNextGame = null;
-          runtime.goToLayout(GAME_LAYOUT);
-        });
+        }
+        loadForNextGame = null;
+        runtime.goToLayout(GAME_LAYOUT);
+      })().catch((e) => {
+        console.error("SIDE ECHO: ошибка запуска новой игры", e);
+        opening = false;
+        if (newButton) newButton.isEnabled = true;
+        if (titleText) titleText.text = "НЕ УДАЛОСЬ ЗАПУСТИТЬ ИГРУ";
+      });
     });
+
     continueButton?.addEventListener("click", () => {
       if (opening || !continueButton.isEnabled) return;
       opening = true;
-      newButton.isEnabled = false;
+      if (newButton) newButton.isEnabled = false;
       continueButton.isEnabled = false;
       void storageOperation(readCheckpoint)
         .then((saved) => {
-          if (!saved) throw new Error("Файл отсутствует");
+          if (!saved) throw new Error("Файл сохранения не найден");
           loadForNextGame = saved;
           runtime.goToLayout(GAME_LAYOUT);
         })
         .catch(async (e) => {
           saveFolderProblem = e?.message || String(e);
           opening = false;
-          newButton.isEnabled = true;
+          if (newButton) newButton.isEnabled = true;
           await refreshCheckpoint();
         });
     });
+
+    loreButton?.addEventListener("click", () => {
+      if (titleText) titleText.text = "ИСТОРИЯ И АВТОРЫ — РАЗДЕЛ ПОКА НЕ ЗАПОЛНЕН";
+    });
+
+    // Кнопка выхода также имеет обработчик в MenuEvents. Этот обработчик
+    // оставляет понятную подсказку в браузере, если закрытие окна запрещено.
+    exitButton?.addEventListener("click", () => {
+      if (titleText) titleText.text = "ЧТОБЫ ВЫЙТИ, ЗАКРОЙТЕ ВКЛАДКУ ИГРЫ";
+    });
+
+    // Фоновая загрузка сохранения: не блокирует стартовый экран и кнопки.
+    void (async () => {
+      await queuedStorage.catch(() => {});
+      if (
+        !hasDesktopDocuments() &&
+        !hasPluginPreviewDocuments() &&
+        typeof indexedDB !== "undefined"
+      ) {
+        try {
+          projectRootHandle = await getRememberedDocuments();
+        } catch (e) {
+          console.warn("SIDE ECHO: не удалось восстановить папку сохранений", e);
+        }
+      }
+      await refreshCheckpoint();
+    })().catch((e) => {
+      console.error("SIDE ECHO: фоновая инициализация меню", e);
+      if (continueButton) continueButton.isEnabled = false;
+      if (infoText) infoText.text = "Не удалось проверить сохранение. Новая игра доступна.";
+    });
   }
 
-  runtime.addEventListener("beforeanylayoutend", () => {
+    runtime.addEventListener("beforeanylayoutend", () => {
     cleanup();
     cleanup = () => {};
   });
@@ -970,6 +1016,112 @@ runOnStartup((runtime) => {
     const hintParts = ["hintPanel", "hintText", "hintCloseButton"].flatMap(
       getAll,
     );
+    const hintTextObject = getOne("hintText");
+    const HINT_MEMO_TEXT = `ПАМЯТКА ОПЕРАТОРА «МАЯКА»
+Перед началом смены ознакомьтесь с порядком работы!
+
+1. Подготовьтесь к смене
+- В начале игры вам доступен магазин. Вы можете приобрести необходимые товары: кофе и корм для кошки.
+- Магазин будет доступен только в начале игры. После его закрытия сделать новые покупки не получится: поставки на «Маяк» осуществляются только один раз за смену.
+- Распределите имеющиеся ресурсы разумно — пополнить запасы позже не удастся.
+
+2. Получите сигнал
+- Примите вызов и выслушайте абонента.
+- Сверьтесь с информацией из факса.
+
+3. Проверьте абонента
+- Задавайте уточняющие вопросы, чтобы получить дополнительные сведения.
+- Каждый вопрос можно задать только один раз за разговор.
+- Слушайте не только ответы, но и голос.
+
+4. Изучите улики
+- Сопоставляйте полученные данные с ответами абонента и информацией из факса и анализаторов.
+- Отмечайте в чек-листе как совпадения, так и несоответствия.
+Помните: приборы помогают анализировать сигнал, но не определяют автоматически, человек перед вами или Эхо.
+
+5. Не забывайте о кошке
+- Кошку можно покормить. Если она сыта, то может устроиться у вас на коленях.
+- Иногда кошка ведёт себя странно без видимой причины. Учитывайте, что кошки чувствительнее людей и острее реагируют на различного рода аномалии.
+
+6. Примите решение
+- Выдайте одноразовое разрешение, если считаете абонента подлинным.
+- Или откажите в доступе, если подозреваете подделку.
+
+7. Следите за состоянием Рауля
+- Кофе восстанавливает энергию. Её истощение приводит к снижению рассудка.
+
+Главное правило — не доверяйте одному признаку.
+Сопоставляйте ответы, документы и звуковые улики. Даже привычные вещи вокруг могут оказаться не такими надёжными, как кажется.
+«Маяк» — последняя линия связи. Будьте внимательны к каждому вызову.`;
+    if (hintTextObject) hintTextObject.text = HINT_MEMO_TEXT;
+
+    // Native, touch-friendly HTML scroll area positioned over the in-game memo.
+    // The game canvas remains responsible for the panel and close button.
+    let hintScrollerElement = null;
+    let hintScrollerCanvas = null;
+    let hintScrollerPositionHandler = null;
+    function positionHintScroller() {
+      if (!hintScrollerElement || !hintScrollerCanvas) return;
+      const rect = hintScrollerCanvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      Object.assign(hintScrollerElement.style, {
+        left: `${rect.left + rect.width * (96 / 1920)}px`,
+        top: `${rect.top + rect.height * (139 / 1080)}px`,
+        width: `${rect.width * (1680 / 1920)}px`,
+        height: `${rect.height * (800 / 1080)}px`,
+        fontSize: `${Math.max(12, rect.width * (34 / 1920))}px`,
+      });
+    }
+    function mountHintScroller() {
+      if (typeof document === "undefined" || typeof window === "undefined" || runtime.isInWorker) return;
+      if (hintScrollerElement) return;
+      const canvas = document.querySelector("canvas");
+      if (!canvas) return;
+      const scroller = document.createElement("div");
+      scroller.setAttribute("aria-label", "Памятка оператора Маяка");
+      scroller.setAttribute("role", "region");
+      scroller.tabIndex = 0;
+      Object.assign(scroller.style, {
+        position: "fixed",
+        zIndex: "999999",
+        overflowY: "auto",
+        overflowX: "hidden",
+        boxSizing: "border-box",
+        padding: "0 18px 24px 0",
+        margin: "0",
+        color: "rgba(230, 242, 230, 1)",
+        background: "transparent",
+        fontFamily: "Arial, sans-serif",
+        fontWeight: "400",
+        lineHeight: "1.28",
+        whiteSpace: "pre-wrap",
+        overflowWrap: "break-word",
+        overscrollBehavior: "contain",
+        touchAction: "pan-y",
+        scrollbarWidth: "thin",
+        scrollbarColor: "rgba(190, 210, 190, .8) transparent",
+        WebkitOverflowScrolling: "touch",
+      });
+      scroller.textContent = HINT_MEMO_TEXT;
+      document.body.appendChild(scroller);
+      hintScrollerElement = scroller;
+      hintScrollerCanvas = canvas;
+      hintScrollerPositionHandler = positionHintScroller;
+      window.addEventListener("resize", hintScrollerPositionHandler);
+      window.addEventListener("scroll", hintScrollerPositionHandler, true);
+      positionHintScroller();
+      if (hintTextObject) hintTextObject.isVisible = false;
+    }
+    function unmountHintScroller() {
+      if (hintScrollerPositionHandler && typeof window !== "undefined") {
+        window.removeEventListener("resize", hintScrollerPositionHandler);
+        window.removeEventListener("scroll", hintScrollerPositionHandler, true);
+      }
+      hintScrollerElement?.remove();
+      hintScrollerElement = null;
+      hintScrollerCanvas = null;
+      hintScrollerPositionHandler = null;
+    }
     const endParts = [
       "endPanel",
       "endTitleText",
@@ -1192,8 +1344,13 @@ runOnStartup((runtime) => {
       runtime.goToLayout(MENU_LAYOUT);
     }
 
-    const openHint = () => openOverlay("hint", hintParts);
+    const openHint = () => {
+      const opened = openOverlay("hint", hintParts);
+      if (opened) mountHintScroller();
+      return opened;
+    };
     const closeHint = () => {
+      unmountHintScroller();
       closeOverlay("hint", hintParts);
       if (isTutorialPhase && !isShopDisabled) {
         isTutorialPhase = false;
@@ -1700,6 +1857,7 @@ runOnStartup((runtime) => {
     };
 
     cleanup = () => {
+      unmountHintScroller();
       for (const [name, cb] of runtimeListeners)
         runtime.removeEventListener(name, cb);
       clearTimeout(creditsFlashTimer);
