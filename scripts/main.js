@@ -1,5 +1,5 @@
 // ================================================================
-// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС ВСЕХ БАГОВ)
+// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС ЛОГИКИ КОШКИ)
 // ================================================================
 
 runOnStartup((runtime) => {
@@ -558,7 +558,7 @@ runOnStartup((runtime) => {
     const config = await loadGameConfig();
     const varManager = runtime.objects.varManager.getFirstInstance();
 
-    // БАГ-ФИКС: Если это новая игра, принудительно сбрасываем все глобальные переменные
+    // Сброс переменных для новой игры
     if (!restoredSave) {
       varManager.instVars.Energy = config.settings?.maxEnergy || 10;
       varManager.instVars.Credits = 5; 
@@ -621,17 +621,22 @@ runOnStartup((runtime) => {
     const COFFEE_RESTORE = 3;
     const CATFOOD_PRICE = 2;
     const CATFOOD_MAX = 5;
-    // БАГ-ФИКС: Анализатор шума теперь тоже стоит 1 энергию
     const energyCosts = [1, 1, 1];
 
     let isGameOver = false;
     let isShopDisabled = restoredSave?.isShopDisabled === true;
     let isTutorialPhase = !restoredSave && !isShopDisabled;
 
-    let isCatFed = restoredSave?.isCatFed || false;
-    let catState = restoredSave?.catState !== undefined ? restoredSave.catState : 0;
-    // БАГ-ФИКС: Если кошка не покормлена и не злится, показываем силуэт (0)
-    if (!isCatFed && catState !== 2) catState = 0;
+    // НОВЫЙ ФЛАГ: Был ли куплен корм хоть раз
+    let hasBoughtCatFood = restoredSave?.hasBoughtCatFood !== undefined 
+        ? restoredSave.hasBoughtCatFood 
+        : (restoredSave?.isCatFed || false);
+
+    // Инициализация кадра кошки
+    let catState = 0;
+    if (hasBoughtCatFood) {
+        catState = (restoredSave?.catState === 2) ? 2 : 1;
+    }
 
     let catAngryTimer = restoredSave?.catAngryTimer || 0;
     let echoMistakes = restoredSave?.echoMistakes || 0;
@@ -701,10 +706,26 @@ runOnStartup((runtime) => {
       }
     }
 
+    // ЛОГИКА ОТОБРАЖЕНИЯ КОШКИ
     function updateCatUI() {
       if (!catFace) return;
+      
+      // Если корм не покупали — намертво 0 кадр
+      if (!hasBoughtCatFood) {
+          catState = 0;
+      } 
+      // Если покупали — никогда не даем упасть в 0 (только 1 или 2)
+      else if (catState === 0) {
+          catState = 1; 
+      }
+      
+      // ФИКС: Обязательно останавливаем анимацию, чтобы кадры не крутились сами по себе
+      catFace.animationSpeed = 0;
+      catFace.stopAnimation();
+      
       catFace.animationFrame = catState;
-      catFace.isVisible = true; // 0 - это силуэт, 1 - спит, 2 - злая. Видимость не убираем.
+      catFace.isVisible = true;
+      
       const view = viewRect(catFace.layer);
       catFace.x = view.cx + view.w / 2 - 150;
       catFace.y = view.cy + view.h / 2 - 150;
@@ -754,7 +775,6 @@ runOnStartup((runtime) => {
         const visibleHistory = chatHistory.slice(-6);
         dialogText.text = visibleHistory.length > 0 ? visibleHistory.join("\n\n") : callText();
       } else if (mailMode) {
-        // БАГ-ФИКС: Добавлена кодовая фраза в лист ожидания
         let faxText = `[color=#84e6a6][b]СПИСОК ОЖИДАЕМЫХ КУРЬЕРОВ:[/b][/color]\n\n`;
         shiftPersons.forEach((p, idx) => {
           faxText += `${idx + 1}. [color=#84e6a6]${p.name}[/color] (${p.frequency || "??"} МГц) - ${p.cargo}\n`;
@@ -865,10 +885,15 @@ runOnStartup((runtime) => {
       renderDialog();
 
       echoMistakes = 0;
-      if (isCatFed) {
-        catState = 1;
-        updateCatUI();
+      
+      // Обновляем кошку на новый звонок
+      if (hasBoughtCatFood) {
+          catState = 1;
+      } else {
+          catState = 0;
       }
+      updateCatUI();
+      
       void saveCheckpoint("new-call");
     }
 
@@ -1255,8 +1280,6 @@ runOnStartup((runtime) => {
         renderDialog();
       });
 
-    // БАГ-ФИКС: Обновлена логика статистики. 
-    // Передача координат: Эхо -> Потеря зоны, Реальный -> Курьер дошел.
     if (transferButton)
       transferButton.addEventListener("click", () => {
         if (!radioClickAllowed()) return;
@@ -1270,7 +1293,6 @@ runOnStartup((runtime) => {
         startNextCall();
       });
 
-    // Отказ: Реальный -> Курьер потерян. Эхо -> Ничего не происходит.
     if (declineButton)
       declineButton.addEventListener("click", () => {
         if (!radioClickAllowed()) return;
@@ -1306,7 +1328,6 @@ runOnStartup((runtime) => {
         playClick(); openEndScreen();
       });
 
-    // БАГ-ФИКС: Удаляем сейв при выходе в меню с экрана итогов
     if (endMenuButton)
       endMenuButton.addEventListener("click", async () => {
         playClick();
@@ -1350,12 +1371,11 @@ runOnStartup((runtime) => {
         changeFrameButton.x = view.cx + offsetX; changeFrameButton.y = view.cy - 200;
       }
       
-      // БАГ-ФИКС: Таймер злости кошки
+      // Таймер злости кошки
       if (catState === 2) {
         catAngryTimer -= runtime.dt;
         if (catAngryTimer <= 0) {
-          catState = 0;
-          isCatFed = false; // Кошка уходит
+          catState = hasBoughtCatFood ? 1 : 0; // Если корм есть, она снова спит (1), иначе исчезает (0)
           updateCatUI();
           void saveCheckpoint("action");
         }
@@ -1380,15 +1400,17 @@ runOnStartup((runtime) => {
         void saveCheckpoint("purchase");
       });
 
-    // БАГ-ФИКС: При покупке корма кошка сразу появляется
     if (shopCatFoodBuyButton)
       shopCatFoodBuyButton.addEventListener("click", () => {
         if (runtime.globalVars.shopOpen === 0 || varManager.instVars.CatFood >= CATFOOD_MAX || varManager.instVars.Credits < CATFOOD_PRICE) return;
         varManager.instVars.Credits -= CATFOOD_PRICE;
         varManager.instVars.CatFood += 1;
-        isCatFed = true;
-        catState = 1;
+        
+        // ПРИ ПОКУПКЕ СТАВИМ ФЛАГ, ЧТО КОРМ КУПЛЕН, И ВКЛЮЧАЕМ 1 КАДР
+        hasBoughtCatFood = true;
+        catState = 1; 
         updateCatUI();
+        
         showShopMessage("Корм куплен. Кошка теперь с тобой.");
         void saveCheckpoint("action");
         updateCreditsUI(); refreshShopTexts();
@@ -1502,7 +1524,8 @@ runOnStartup((runtime) => {
         chatHistory: chatHistory.slice(), deviceChatHistory: deviceChatHistory.slice(),
         callNumber, currentPerson: currentPerson, shiftPersons: shiftPersons,
         listMarks: currentMarks, checklistHistory: allCallMarks, isShopDisabled: isShopDisabled,
-        catState: catState, catAngryTimer: catAngryTimer, isCatFed: isCatFed, echoMistakes: echoMistakes,
+        catState: catState, catAngryTimer: catAngryTimer, echoMistakes: echoMistakes,
+        hasBoughtCatFood: hasBoughtCatFood // Сохраняем флаг
       };
     }
 
@@ -1582,28 +1605,40 @@ runOnStartup((runtime) => {
       }
 
       for (let i = 0; i < listMarks.length; i++) {
+        // ФИКС: Обрабатываем галочку (listCheckCells)
         if (isPointerOver(listCheckCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 1 ? 0 : 1;
           renderListChecks();
-          void saveCheckpoint("action"); // БАГ-ФИКС: Сохранение после клика по чек-листу
+          void saveCheckpoint("action"); 
+          
+          // Кошка злится, если куплен корм и это Эхо
+          if (listMarks[i] === 1 && hasBoughtCatFood && currentPerson && currentPerson.isEcho) {
+            if (catState === 1) {
+              catState = 2; 
+              catAngryTimer = 5; 
+              updateCatUI();
+              showSaveNotice("Кошка зашипела!", true);
+              void saveCheckpoint("action");
+            }
+          }
           break;
         }
+        
+        // ФИКС: Обрабатываем крестик (listCrossCells)
         if (isPointerOver(listCrossCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 2 ? 0 : 2;
           renderListChecks();
-          void saveCheckpoint("action"); // БАГ-ФИКС: Сохранение после клика по чек-листу
+          void saveCheckpoint("action"); 
           
-          if (listMarks[i] === 2) {
+          // Кошка злится, если куплен корм и это Эхо
+          if (listMarks[i] === 2 && hasBoughtCatFood && currentPerson && currentPerson.isEcho) {
             if (catState === 1) {
-              echoMistakes++;
-              if (echoMistakes >= 2) {
-                catState = 2; catAngryTimer = 5; updateCatUI();
-                showSaveNotice("Кошка зашипела!", true);
-                void saveCheckpoint("action");
-              }
+              catState = 2; 
+              catAngryTimer = 5; 
+              updateCatUI();
+              showSaveNotice("Кошка зашипела!", true);
+              void saveCheckpoint("action");
             }
-          } else {
-            if (echoMistakes > 0) echoMistakes--;
           }
           break;
         }
