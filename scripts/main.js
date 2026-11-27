@@ -724,7 +724,9 @@ runOnStartup((runtime) => {
       catFace.stopAnimation();
       
       catFace.animationFrame = catState;
-      catFace.isVisible = true;
+      
+      // ФИКС: Скрываем кошку, если открыт магазин или какой-то оверлей
+      catFace.isVisible = (runtime.globalVars.shopOpen !== 1) && !overlay;
       
       const view = viewRect(catFace.layer);
       catFace.x = view.cx + view.w / 2 - 150;
@@ -1189,7 +1191,10 @@ runOnStartup((runtime) => {
         b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
       });
       if (coffeeButton) coffeeButton.isVisible = coffeeInStock;
-      if (catFace) catFace.isVisible = true;
+      
+      // ФИКС: Вместо принудительного включения, обновляем стейт
+      updateCatUI(); 
+      
       if (!isShopDisabled) {
         isShopDisabled = true;
         if (shopButton) shopButton.isVisible = false;
@@ -1226,8 +1231,10 @@ runOnStartup((runtime) => {
       gameDomButtons.forEach((b) => {
         b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
       });
-      if (catFace) catFace.isVisible = true;
       overlay = null;
+      
+      // ФИКС: Вместо принудительного включения, обновляем стейт
+      updateCatUI(); 
     }
 
     const playClick = () => { try { runtime.callFunction("PlayClick"); } catch (e) {} };
@@ -1409,7 +1416,7 @@ runOnStartup((runtime) => {
         // ПРИ ПОКУПКЕ СТАВИМ ФЛАГ, ЧТО КОРМ КУПЛЕН, И ВКЛЮЧАЕМ 1 КАДР
         hasBoughtCatFood = true;
         catState = 1; 
-        updateCatUI();
+        updateCatUI(); // Теперь эта функция не покажет кошку поверх магазина
         
         showShopMessage("Корм куплен. Кошка теперь с тобой.");
         void saveCheckpoint("action");
@@ -1605,7 +1612,7 @@ runOnStartup((runtime) => {
       }
 
       for (let i = 0; i < listMarks.length; i++) {
-        // ФИКС: Обрабатываем галочку (listCheckCells)
+        // Обрабатываем галочку (listCheckCells)
         if (isPointerOver(listCheckCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 1 ? 0 : 1;
           renderListChecks();
@@ -1624,7 +1631,7 @@ runOnStartup((runtime) => {
           break;
         }
         
-        // ФИКС: Обрабатываем крестик (listCrossCells)
+        // Обрабатываем крестик (listCrossCells)
         if (isPointerOver(listCrossCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 2 ? 0 : 2;
           renderListChecks();
