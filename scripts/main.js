@@ -1,5 +1,5 @@
 // ================================================================
-// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС ЛОГИКИ КОШКИ)
+// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС + 7 ЗВОНКОВ + ГЕНЕРАТОР)
 // ================================================================
 
 runOnStartup((runtime) => {
@@ -84,6 +84,131 @@ runOnStartup((runtime) => {
     return configPromise;
   }
   
+  // --- ГЕНЕРАТОР ПЕРСОНАЖЕЙ ---
+  const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  function sampleUnique(arr, n) {
+    const out = [], used = new Set();
+    while (out.length < n && used.size < arr.length) {
+      const x = rnd(arr);
+      if (!used.has(x)) { used.add(x); out.push(x); }
+    }
+    return out;
+  }
+
+  const allLocations = (m) =>
+    [...(m.locations?.sectors || []), ...(m.locations?.zones || []), ...(m.locations?.cities || [])];
+
+  function codePhrase(m) {
+    if (!m.code_phrase) return "Код не задан";
+    const gender = m.code_phrase[rnd(['masculine', 'feminine'])];
+    return `${rnd(gender.adjectives)} ${rnd(gender.nouns)}`;
+  }
+
+  function realPerson(m) {
+    const num = String(Math.floor(Math.random() * 99) + 1).padStart(2, '0');
+    const realWeather = rnd(m.weather);
+    const realWind = rnd(m.wind_options || [true, false]);
+    
+    return {
+      name: `${rnd(m.animals)}-${num}`,
+      frequency: (Math.floor(Math.random() * 2000) + 1) / 10,
+      cargo: rnd(m.cargo),
+      code_phrase: codePhrase(m),
+      route: (() => {
+        const [s, e] = sampleUnique(allLocations(m), 2);
+        return { start: s || "Неизвестно", end: e || "Неизвестно" };
+      })(),
+      weather: realWeather,
+      wind: realWind,
+      biome: rnd(m.biomes),
+      // ФИКС: Данные для Анализатора шума (Прибор 0)
+      analyzer: {
+        precipitation: realWeather,
+        wind: realWind ? "Сильный порывистый ветер" : "Штиль, ветра нет",
+        engine: rnd(["Ровный гул двигателя", "Стук и скрежет", "Тишина, двигатель заглушен"]),
+        other_sounds: rnd(["Посторонних звуков нет", "Шорох листвы", "Радиопомехи", "Скрип металла"])
+      }
+    };
+  }
+
+  function makeDifferent(field, person, m) {
+    if (field === 'frequency') {
+      const target = Math.round(person.frequency * 10);
+      let val;
+      do { val = Math.floor(Math.random() * 2000) + 1; } while (val === target);
+      return val / 10;
+    }
+    if (field === 'cargo') {
+      const opts = m.cargo.filter(x => x !== person.cargo);
+      return opts.length > 0 ? rnd(opts) : person.cargo + " (аномалия)";
+    }
+    if (field === 'code_phrase') {
+      let p = codePhrase(m);
+      let attempts = 0;
+      while (p === person.code_phrase && attempts < 20) { 
+        p = codePhrase(m); 
+        attempts++;
+      }
+      return p === person.code_phrase ? person.code_phrase + " (искажение)" : p;
+    }
+    if (field === 'route') {
+      const endpoint = rnd(['start', 'end']);
+      const other = endpoint === 'start' ? 'end' : 'start';
+      const opts = allLocations(m).filter(x => x !== person.route[endpoint] && x !== person.route[other]);
+      if (opts.length === 0) return { ...person.route, [endpoint]: "Неизвестная зона" };
+      return { ...person.route, [endpoint]: rnd(opts) };
+    }
+    if (field === 'weather') {
+      const opts = m.weather.filter(x => x !== person.weather);
+      return opts.length > 0 ? rnd(opts) : person.weather + " (искажение)";
+    }
+    if (field === 'wind') return !person.wind;
+    if (field === 'biome') {
+      const opts = m.biomes.filter(x => x !== person.biome);
+      return opts.length > 0 ? rnd(opts) : person.biome + " (искажение)";
+    }
+    return person[field];
+  }
+
+  function generatePerson(m, echoChance) {
+    const person = realPerson(m);
+    const isEcho = Math.random() < echoChance;
+    
+    if (isEcho) {
+      const echoValue = {
+        frequency: person.frequency,
+        cargo: person.cargo,
+        code_phrase: person.code_phrase,
+        route: { ...person.route },
+        weather: person.weather,
+        wind: person.wind,
+        biome: person.biome,
+        monotony: rnd(m.echo?.monotony_options || [true, false]),
+        waiting_list: rnd(m.echo?.waiting_list_options || [true, false]),
+      };
+      
+      const mistakeFields = m.echo?.mistake_fields || ['frequency', 'cargo', 'route', 'weather', 'biome', 'wind', 'code_phrase'];
+      const mistakes = sampleUnique(mistakeFields, 3);
+      
+      for (const f of mistakes) {
+        echoValue[f] = makeDifferent(f, person, m);
+      }
+      return { ...person, isEcho: true, mistakes, echo_value: echoValue };
+    }
+    
+    return { ...person, isEcho: false, mistakes: [], echo_value: {} };
+  }
+
+  function generateShiftPersons(m, count, echoChance) {
+    const persons = Array.from({ length: count }, () => generatePerson(m, echoChance));
+    // Гарантируем, что хотя бы один Эхо будет в смене
+    if (!persons.some(p => p.isEcho)) {
+        persons[0] = generatePerson(m, 1.0);
+    }
+    return persons;
+  }
+  // --- КОНЕЦ ГЕНЕРАТОРА ---
 
   function storageOperation(action) {
     queuedStorage = queuedStorage.catch(() => {}).then(action);
@@ -616,6 +741,9 @@ runOnStartup((runtime) => {
     const shopButton = getOne("shopButton");
     const catFace = getOne("catFace");
 
+    // ФИКС: Перенесли объявление overlay наверх
+    let overlay = null;
+
     const MAX_ENERGY = 10;
     const CURRENCY_LABEL = "ТАЛОНЫ";
     const COFFEE_PRICE = 3;
@@ -628,12 +756,10 @@ runOnStartup((runtime) => {
     let isShopDisabled = restoredSave?.isShopDisabled === true;
     let isTutorialPhase = !restoredSave && !isShopDisabled;
 
-    // НОВЫЙ ФЛАГ: Был ли куплен корм хоть раз
     let hasBoughtCatFood = restoredSave?.hasBoughtCatFood !== undefined 
         ? restoredSave.hasBoughtCatFood 
         : (restoredSave?.isCatFed || false);
 
-    // Инициализация кадра кошки
     let catState = 0;
     if (hasBoughtCatFood) {
         catState = (restoredSave?.catState === 2) ? 2 : 1;
@@ -649,12 +775,10 @@ runOnStartup((runtime) => {
 
     let shiftPersons = restoredSave?.shiftPersons;
     if (!shiftPersons) {
-      const shuffled = [...(config.persons || [])].sort(() => 0.5 - Math.random());
-      shiftPersons = shuffled.slice(0, 3);
-      if (!shiftPersons.some((p) => p.isEcho)) {
-        const echoPerson = config.persons.find((p) => p.isEcho);
-        if (echoPerson) shiftPersons[0] = echoPerson;
-      }
+      const materials = config.materials || {}; 
+      const echoChance = config.settings?.echoChance ?? 0.35;
+      // ФИКС: Увеличили смену до 7 курьеров
+      shiftPersons = generateShiftPersons(materials, 7, echoChance);
     }
 
     let currentPerson = restoredSave?.currentPerson || shiftPersons[0] || null;
@@ -707,26 +831,18 @@ runOnStartup((runtime) => {
       }
     }
 
-    // ЛОГИКА ОТОБРАЖЕНИЯ КОШКИ
     function updateCatUI() {
       if (!catFace) return;
       
-      // Если корм не покупали — намертво 0 кадр
       if (!hasBoughtCatFood) {
           catState = 0;
-      } 
-      // Если покупали — никогда не даем упасть в 0 (только 1 или 2)
-      else if (catState === 0) {
+      } else if (catState === 0) {
           catState = 1; 
       }
       
-      // ФИКС: Обязательно останавливаем анимацию, чтобы кадры не крутились сами по себе
       catFace.animationSpeed = 0;
       catFace.stopAnimation();
-      
       catFace.animationFrame = catState;
-      
-      // ФИКС: Скрываем кошку, если открыт магазин или какой-то оверлей
       catFace.isVisible = (runtime.globalVars.shopOpen !== 1) && !overlay;
       
       const view = viewRect(catFace.layer);
@@ -854,7 +970,8 @@ runOnStartup((runtime) => {
     }
 
     function startNextCall() {
-      if (callNumber >= 3) {
+      // ФИКС: Условие выхода теперь при 7 звонках
+      if (callNumber >= 7) {
         isGameOver = true;
         openEndScreen();
         return;
@@ -889,7 +1006,6 @@ runOnStartup((runtime) => {
 
       echoMistakes = 0;
       
-      // Обновляем кошку на новый звонок
       if (hasBoughtCatFood) {
           catState = 1;
       } else {
@@ -1164,7 +1280,7 @@ runOnStartup((runtime) => {
     ].filter(Boolean);
 
     const savedDomVisibility = new Map();
-    let overlay = null;
+    // ФИКС: let overlay = null; перенесено наверх
 
     function openShop() {
       if (runtime.globalVars.shopOpen === 1) return;
@@ -1193,7 +1309,6 @@ runOnStartup((runtime) => {
       });
       if (coffeeButton) coffeeButton.isVisible = coffeeInStock;
       
-      // ФИКС: Вместо принудительного включения, обновляем стейт
       updateCatUI(); 
       
       if (!isShopDisabled) {
@@ -1234,7 +1349,6 @@ runOnStartup((runtime) => {
       });
       overlay = null;
       
-      // ФИКС: Вместо принудительного включения, обновляем стейт
       updateCatUI(); 
     }
 
@@ -1379,11 +1493,10 @@ runOnStartup((runtime) => {
         changeFrameButton.x = view.cx + offsetX; changeFrameButton.y = view.cy - 200;
       }
       
-      // Таймер злости кошки
       if (catState === 2) {
         catAngryTimer -= runtime.dt;
         if (catAngryTimer <= 0) {
-          catState = hasBoughtCatFood ? 1 : 0; // Если корм есть, она снова спит (1), иначе исчезает (0)
+          catState = hasBoughtCatFood ? 1 : 0;
           updateCatUI();
           void saveCheckpoint("action");
         }
@@ -1414,10 +1527,9 @@ runOnStartup((runtime) => {
         varManager.instVars.Credits -= CATFOOD_PRICE;
         varManager.instVars.CatFood += 1;
         
-        // ПРИ ПОКУПКЕ СТАВИМ ФЛАГ, ЧТО КОРМ КУПЛЕН, И ВКЛЮЧАЕМ 1 КАДР
         hasBoughtCatFood = true;
         catState = 1; 
-        updateCatUI(); // Теперь эта функция не покажет кошку поверх магазина
+        updateCatUI();
         
         showShopMessage("Корм куплен. Кошка теперь с тобой.");
         void saveCheckpoint("action");
@@ -1533,7 +1645,7 @@ runOnStartup((runtime) => {
         callNumber, currentPerson: currentPerson, shiftPersons: shiftPersons,
         listMarks: currentMarks, checklistHistory: allCallMarks, isShopDisabled: isShopDisabled,
         catState: catState, catAngryTimer: catAngryTimer, echoMistakes: echoMistakes,
-        hasBoughtCatFood: hasBoughtCatFood // Сохраняем флаг
+        hasBoughtCatFood: hasBoughtCatFood
       };
     }
 
@@ -1613,13 +1725,11 @@ runOnStartup((runtime) => {
       }
 
       for (let i = 0; i < listMarks.length; i++) {
-        // Обрабатываем галочку (listCheckCells)
         if (isPointerOver(listCheckCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 1 ? 0 : 1;
           renderListChecks();
           void saveCheckpoint("action"); 
           
-          // Кошка злится, если куплен корм и это Эхо
           if (listMarks[i] === 1 && hasBoughtCatFood && currentPerson && currentPerson.isEcho) {
             if (catState === 1) {
               catState = 2; 
@@ -1632,13 +1742,11 @@ runOnStartup((runtime) => {
           break;
         }
         
-        // Обрабатываем крестик (listCrossCells)
         if (isPointerOver(listCrossCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 2 ? 0 : 2;
           renderListChecks();
           void saveCheckpoint("action"); 
           
-          // Кошка злится, если куплен корм и это Эхо
           if (listMarks[i] === 2 && hasBoughtCatFood && currentPerson && currentPerson.isEcho) {
             if (catState === 1) {
               catState = 2; 
