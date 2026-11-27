@@ -1,14 +1,13 @@
 // ================================================================
-// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС МАСШТАБИРОВАНИЯ И СЕЙВОВ)
+// SIDE ECHO — main.js (ФИНАЛЬНЫЙ ФИКС ВСЕХ БАГОВ)
 // ================================================================
 
 runOnStartup((runtime) => {
   const LEGACY_SAVE_KEY = "side-echo-checkpoint-v1";
   const SAVE_KEY = "side-echo-checkpoint-json-v2";
   
-  // СОХРАНЕНИЕ ПРЯМО В КОРЕНЬ ВЫБРАННОЙ ПАПКИ
   const SAVE_FILENAME = "savegame.json";
-  const SAVE_PATH = SAVE_FILENAME; // Без вложенных папок
+  const SAVE_PATH = SAVE_FILENAME;
 
   const DOCUMENTS_TAG = "<documents>";
   const PREVIEW_PICKER_TAG = "side-echo-documents";
@@ -56,22 +55,16 @@ runOnStartup((runtime) => {
     );
     const back = runtime.objects.settingsBackButton?.getFirstInstance();
     let opened = false;
-    parts.forEach((o) => {
-      o.isVisible = false;
-    });
+    parts.forEach((o) => { o.isVisible = false; });
     function open() {
       if (opened || beforeOpen() === false) return;
       opened = true;
-      parts.forEach((o) => {
-        o.isVisible = true;
-      });
+      parts.forEach((o) => { o.isVisible = true; });
     }
     function close() {
       if (!opened) return;
       opened = false;
-      parts.forEach((o) => {
-        o.isVisible = false;
-      });
+      parts.forEach((o) => { o.isVisible = false; });
       afterClose();
     }
     back?.addEventListener("click", close);
@@ -238,8 +231,6 @@ runOnStartup((runtime) => {
     if (!projectRootHandle) return null;
     if (!(await hasDocumentsPermission(create ? "readwrite" : "read")))
       throw new Error("Разреши доступ к папке");
-      
-    // Сразу берем файл из корня выбранной папки
     try {
       return await projectRootHandle.getFileHandle(SAVE_FILENAME, { create });
     } catch (e) {
@@ -272,7 +263,6 @@ runOnStartup((runtime) => {
   }
   
   async function getNativeSaveFolderState(pickerTag) {
-    // Проверяем наличие файла прямо в корне
     const root = await fsPlugin.listContent(pickerTag, "", false);
     return {
       folderExists: true, 
@@ -289,7 +279,7 @@ runOnStartup((runtime) => {
         if (!state.fileExists) return null;
         content = await fsPlugin.readFile({
           pickerTag: nativeTag,
-          folderPath: SAVE_FILENAME, // Просто имя файла
+          folderPath: SAVE_FILENAME,
           mode: "text",
         });
       } else {
@@ -313,7 +303,7 @@ runOnStartup((runtime) => {
     if (nativeTag) {
       await fsPlugin.writeFile({
         pickerTag: nativeTag,
-        folderPath: SAVE_FILENAME, // Просто имя файла
+        folderPath: SAVE_FILENAME,
         mode: "overwrite",
         data: contents,
       });
@@ -373,8 +363,6 @@ runOnStartup((runtime) => {
     let checkpoint = null;
     let opening = false;
 
-    // Кнопки должны быть доступны сразу: чтение сохранения и IndexedDB
-    // выполняются в фоне и не задерживают запуск StartMenu.
     if (continueButton) continueButton.isEnabled = false;
     if (settingsButton) settingsButton.isEnabled = true;
     if (newButton) newButton.isEnabled = true;
@@ -443,8 +431,6 @@ runOnStartup((runtime) => {
       await updateFolderInfo();
     }
 
-    // Обработчики назначаются до любых await, чтобы меню не зависело от
-    // доступности файловой системы, IndexedDB или разрешения на папку.
     settingsButton?.addEventListener("click", () => {
       if (opening) return;
       settingsUI.open();
@@ -482,7 +468,6 @@ runOnStartup((runtime) => {
         try {
           await requestDocumentsFromClick();
         } catch (e) {
-          // Отмена выбора папки не должна блокировать запуск новой игры.
           saveFolderProblem = e?.message || String(e);
         }
         try {
@@ -523,13 +508,10 @@ runOnStartup((runtime) => {
       if (titleText) titleText.text = "ИСТОРИЯ И АВТОРЫ — РАЗДЕЛ ПОКА НЕ ЗАПОЛНЕН";
     });
 
-    // Кнопка выхода также имеет обработчик в MenuEvents. Этот обработчик
-    // оставляет понятную подсказку в браузере, если закрытие окна запрещено.
     exitButton?.addEventListener("click", () => {
       if (titleText) titleText.text = "ЧТОБЫ ВЫЙТИ, ЗАКРОЙТЕ ВКЛАДКУ ИГРЫ";
     });
 
-    // Фоновая загрузка сохранения: не блокирует стартовый экран и кнопки.
     void (async () => {
       await queuedStorage.catch(() => {});
       if (
@@ -551,7 +533,7 @@ runOnStartup((runtime) => {
     });
   }
 
-    runtime.addEventListener("beforeanylayoutend", () => {
+  runtime.addEventListener("beforeanylayoutend", () => {
     cleanup();
     cleanup = () => {};
   });
@@ -576,13 +558,24 @@ runOnStartup((runtime) => {
     const config = await loadGameConfig();
     const varManager = runtime.objects.varManager.getFirstInstance();
 
-    if (restoredSave) {
+    // БАГ-ФИКС: Если это новая игра, принудительно сбрасываем все глобальные переменные
+    if (!restoredSave) {
+      varManager.instVars.Energy = config.settings?.maxEnergy || 10;
+      varManager.instVars.Credits = 5; 
+      varManager.instVars.CatFood = 0;
+      varManager.instVars.CouriersArrived = 0;
+      varManager.instVars.CouriersLost = 0;
+      varManager.instVars.ZonesLost = 0;
+      varManager.instVars.EchoTalks = 0;
+      varManager.instVars.EnergySpent = 0;
+    } else {
       for (const name of VAR_NAMES) {
         if (Object.hasOwn(restoredSave.variables, name)) {
           varManager.instVars[name] = restoredSave.variables[name];
         }
       }
     }
+    
     runtime.globalVars.isTransitioning = 0;
     runtime.globalVars.shopOpen = 0;
     runtime.globalVars.roomSelect = restoredSave?.roomSelect === 1 ? 1 : 0;
@@ -603,9 +596,7 @@ runOnStartup((runtime) => {
     const askButton = getOne("askButton");
     const transferButton = getOne("transferButton");
     const declineButton = getOne("declineButton");
-    const radioButtons = [askButton, transferButton, declineButton].filter(
-      Boolean,
-    );
+    const radioButtons = [askButton, transferButton, declineButton].filter(Boolean);
     const questionItems = getAll("questionItemText").sort((a, b) => a.y - b.y);
     const cameraObj = getOne("cameraObj");
     if (cameraObj)
@@ -630,31 +621,29 @@ runOnStartup((runtime) => {
     const COFFEE_RESTORE = 3;
     const CATFOOD_PRICE = 2;
     const CATFOOD_MAX = 5;
-    const energyCosts = [2, 1, 1];
+    // БАГ-ФИКС: Анализатор шума теперь тоже стоит 1 энергию
+    const energyCosts = [1, 1, 1];
 
     let isGameOver = false;
     let isShopDisabled = restoredSave?.isShopDisabled === true;
     let isTutorialPhase = !restoredSave && !isShopDisabled;
 
-    let catState =
-      restoredSave?.catState !== undefined ? restoredSave.catState : 0;
-    let catAngryTimer = restoredSave?.catAngryTimer || 0;
     let isCatFed = restoredSave?.isCatFed || false;
+    let catState = restoredSave?.catState !== undefined ? restoredSave.catState : 0;
+    // БАГ-ФИКС: Если кошка не покормлена и не злится, показываем силуэт (0)
+    if (!isCatFed && catState !== 2) catState = 0;
+
+    let catAngryTimer = restoredSave?.catAngryTimer || 0;
     let echoMistakes = restoredSave?.echoMistakes || 0;
 
     const devicesUsed = restoredSave?.devicesUsed || [false, false, false];
     const chatHistory = restoredSave?.chatHistory || [];
     const deviceChatHistory = restoredSave?.deviceChatHistory || [];
-    let callNumber =
-      Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1
-        ? restoredSave.callNumber
-        : 1;
+    let callNumber = Number.isInteger(restoredSave?.callNumber) && restoredSave.callNumber >= 1 ? restoredSave.callNumber : 1;
 
     let shiftPersons = restoredSave?.shiftPersons;
     if (!shiftPersons) {
-      const shuffled = [...(config.persons || [])].sort(
-        () => 0.5 - Math.random(),
-      );
+      const shuffled = [...(config.persons || [])].sort(() => 0.5 - Math.random());
       shiftPersons = shuffled.slice(0, 3);
       if (!shiftPersons.some((p) => p.isEcho)) {
         const echoPerson = config.persons.find((p) => p.isEcho);
@@ -663,29 +652,17 @@ runOnStartup((runtime) => {
     }
 
     let currentPerson = restoredSave?.currentPerson || shiftPersons[0] || null;
-    let currentSpeaker =
-      currentPerson && currentPerson.isEcho && currentPerson.echo_value
-        ? currentPerson.echo_value
-        : currentPerson;
+    let currentSpeaker = currentPerson && currentPerson.isEcho && currentPerson.echo_value ? currentPerson.echo_value : currentPerson;
 
-    const DEVICE_NAMES = [
-      "Анализатор шума",
-      "Анализатор голоса",
-      "Радар погоды",
-    ];
-    const callText = () =>
-      currentSpeaker && currentSpeaker.frequency
-        ? `Частота: ${currentSpeaker.frequency} МГц`
-        : `Звонок Nº ${callNumber}`;
+    const DEVICE_NAMES = ["Анализатор шума", "Анализатор голоса", "Радар погоды"];
+    const callText = () => currentSpeaker && currentSpeaker.frequency ? `Частота: ${currentSpeaker.frequency} МГц` : `Звонок Nº ${callNumber}`;
 
     if (isShopDisabled && shopButton) shopButton.isVisible = false;
 
     let lastDisplayedEnergy = NaN;
     let lastDisplayedCredits = NaN;
     let creditsFlashTimer = null;
-    const creditsTexts = getAll("creditsText").concat(
-      getAll("shopCreditsText"),
-    );
+    const creditsTexts = getAll("creditsText").concat(getAll("shopCreditsText"));
     const creditsBaseColor = new Map();
     creditsTexts.forEach((t) => creditsBaseColor.set(t, [...t.colorRgb]));
 
@@ -697,18 +674,14 @@ runOnStartup((runtime) => {
       const ratio = Math.max(0, Math.min(1, energy / MAX_ENERGY));
       if (energySegments.length > 0) {
         const litCount = Math.round(ratio * energySegments.length);
-        energySegments.forEach((seg, i) => {
-          seg.isVisible = i < litCount;
-        });
+        energySegments.forEach((seg, i) => { seg.isVisible = i < litCount; });
         if (energyBar) energyBar.isVisible = false;
         if (energyBarBG) energyBarBG.isVisible = true;
       } else if (energyBar) {
         energyBar.isVisible = ratio > 0;
       }
       const isOutOfEnergy = energy <= 0;
-      energyButtons.forEach((btn, idx) => {
-        btn.opacity = isOutOfEnergy || devicesUsed[idx] ? 0.2 : 1.0;
-      });
+      energyButtons.forEach((btn, idx) => { btn.opacity = isOutOfEnergy || devicesUsed[idx] ? 0.2 : 1.0; });
     }
 
     function updateCreditsUI() {
@@ -717,19 +690,13 @@ runOnStartup((runtime) => {
       const previous = lastDisplayedCredits;
       lastDisplayedCredits = credits;
       const label = `${CURRENCY_LABEL}: ${credits}`;
-      creditsTexts.forEach((t) => {
-        if (t.text !== label) t.text = label;
-      });
+      creditsTexts.forEach((t) => { if (t.text !== label) t.text = label; });
       if (!Number.isNaN(previous)) {
         const flash = credits > previous ? [0.4, 1, 0.5] : [1, 0.4, 0.4];
-        creditsTexts.forEach((t) => {
-          t.colorRgb = flash;
-        });
+        creditsTexts.forEach((t) => { t.colorRgb = flash; });
         clearTimeout(creditsFlashTimer);
         creditsFlashTimer = setTimeout(() => {
-          creditsTexts.forEach((t) => {
-            t.colorRgb = creditsBaseColor.get(t);
-          });
+          creditsTexts.forEach((t) => { t.colorRgb = creditsBaseColor.get(t); });
         }, 400);
       }
     }
@@ -737,16 +704,14 @@ runOnStartup((runtime) => {
     function updateCatUI() {
       if (!catFace) return;
       catFace.animationFrame = catState;
-      catFace.isVisible = true;
+      catFace.isVisible = true; // 0 - это силуэт, 1 - спит, 2 - злая. Видимость не убираем.
       const view = viewRect(catFace.layer);
       catFace.x = view.cx + view.w / 2 - 150;
       catFace.y = view.cy + view.h / 2 - 150;
     }
 
     let dialogTab = restoredSave?.dialog?.tab || "radio";
-    let currentDevice = Number.isInteger(restoredSave?.dialog?.device)
-      ? restoredSave.dialog.device
-      : null;
+    let currentDevice = Number.isInteger(restoredSave?.dialog?.device) ? restoredSave.dialog.device : null;
 
     function generatePhrase(categoryKey) {
       if (!config.answers || !config.answers[categoryKey]) return "...";
@@ -769,15 +734,14 @@ runOnStartup((runtime) => {
       const questionsMode = dialogTab === "questions";
       const deviceMode = dialogTab === "devices";
       const mailMode = dialogTab === "mail";
-      if (dialogTabRadio)
-        dialogTabRadio.animationFrame = radioMode || questionsMode ? 1 : 0;
-      if (dialogTabDevices)
-        dialogTabDevices.animationFrame = deviceMode ? 1 : 0;
+      
+      if (dialogTabRadio) dialogTabRadio.animationFrame = radioMode || questionsMode ? 1 : 0;
+      if (dialogTabDevices) dialogTabDevices.animationFrame = deviceMode ? 1 : 0;
       if (dialogTabMail) dialogTabMail.animationFrame = mailMode ? 1 : 0;
-      radioButtons.forEach((b) => {
-        b.isVisible = radioMode || questionsMode;
-      });
+      
+      radioButtons.forEach((b) => { b.isVisible = radioMode || questionsMode; });
       renderQuestions();
+      
       if (!dialogText) return;
       if (questionsMode) {
         dialogText.isVisible = false;
@@ -788,32 +752,25 @@ runOnStartup((runtime) => {
 
       if (radioMode) {
         const visibleHistory = chatHistory.slice(-6);
-        dialogText.text =
-          visibleHistory.length > 0 ? visibleHistory.join("\n\n") : callText();
+        dialogText.text = visibleHistory.length > 0 ? visibleHistory.join("\n\n") : callText();
       } else if (mailMode) {
+        // БАГ-ФИКС: Добавлена кодовая фраза в лист ожидания
         let faxText = `[color=#84e6a6][b]СПИСОК ОЖИДАЕМЫХ КУРЬЕРОВ:[/b][/color]\n\n`;
         shiftPersons.forEach((p, idx) => {
           faxText += `${idx + 1}. [color=#84e6a6]${p.name}[/color] (${p.frequency || "??"} МГц) - ${p.cargo}\n`;
+          faxText += `   [color=#aaaaaa]Кодовое слово: ${p.code_phrase || "??"}[/color]\n\n`;
         });
         dialogText.text = faxText;
       } else {
         const visibleDeviceHistory = deviceChatHistory.slice(-4);
-        dialogText.text =
-          visibleDeviceHistory.length > 0
-            ? visibleDeviceHistory.join("\n\n")
-            : "Выберите прибор для анализа.";
+        dialogText.text = visibleDeviceHistory.length > 0 ? visibleDeviceHistory.join("\n\n") : "Выберите прибор для анализа.";
       }
     }
 
-    const questions = (
-      Array.isArray(config.questions) && config.questions.length
-        ? config.questions
-        : ["Кодовая фраза?", "Груз?", "Погода?", "Местность?"]
-    ).slice(0, questionItems.length);
-    const questionsAsked = questions.map(
-      (_, i) => restoredSave?.questionsAsked?.[i] === true,
-    );
+    const questions = (Array.isArray(config.questions) && config.questions.length ? config.questions : ["Кодовая фраза?", "Груз?", "Погода?", "Местность?"]).slice(0, questionItems.length);
+    const questionsAsked = questions.map((_, i) => restoredSave?.questionsAsked?.[i] === true);
     let hoveredQuestion = -1;
+    
     questionItems.forEach((item) => {
       if ("isBbcodeEnabled" in item) item.isBbcodeEnabled = true;
     });
@@ -829,18 +786,14 @@ runOnStartup((runtime) => {
           item.text = `[s]${questions[i]}[/s]`;
         } else {
           item.colorRgb = [1, 1, 1];
-          item.text =
-            hoveredQuestion === i ? `[u]${questions[i]}[/u]` : questions[i];
+          item.text = hoveredQuestion === i ? `[u]${questions[i]}[/u]` : questions[i];
         }
       });
     }
 
     function questionAt(clientX, clientY) {
       if (dialogTab !== "questions") return -1;
-      return questionItems.findIndex(
-        (item, i) =>
-          i < questions.length && isPointerOver(item, clientX, clientY),
-      );
+      return questionItems.findIndex((item, i) => i < questions.length && isPointerOver(item, clientX, clientY));
     }
 
     function askQuestion(i) {
@@ -849,21 +802,22 @@ runOnStartup((runtime) => {
       varManager.instVars.EnergySpent += 1;
       updateEnergyUI();
       questionsAsked[i] = true;
+      
       const categories = ["code_phrase", "cargo", "weather", "biome"];
       const category = categories[i];
       const answer = generatePhrase(category);
+      
       chatHistory.push(`[color=#aaaaaa]> ${questions[i]}[/color]`);
-      chatHistory.push(
-        `[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${answer}`,
-      );
+      chatHistory.push(`[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${answer}`);
+      
       dialogTab = "radio";
       renderQuestions();
       renderDialog();
+      
       if (varManager.instVars.Energy <= 0) {
         isGameOver = true;
         setTimeout(() => {
-          if (dialogText)
-            dialogText.text = "ЭНЕРГИЯ ИСЧЕРПАНА. СВЯЗЬ ПРЕРВАНА...";
+          if (dialogText) dialogText.text = "ЭНЕРГИЯ ИСЧЕРПАНА. СВЯЗЬ ПРЕРВАНА...";
           openEndScreen();
         }, 600);
       }
@@ -882,9 +836,11 @@ runOnStartup((runtime) => {
         openEndScreen();
         return;
       }
+      
       checklistHistory[String(callNumber)] = listMarks.slice();
       callNumber += 1;
       resetQuestions();
+      
       for (let i = 0; i < listMarks.length; i++) listMarks[i] = 0;
       for (let i = 0; i < devicesUsed.length; i++) devicesUsed[i] = false;
       deviceChatHistory.length = 0;
@@ -897,24 +853,19 @@ runOnStartup((runtime) => {
       if (shiftPersons.length > 0) {
         const personIndex = (callNumber - 1) % shiftPersons.length;
         currentPerson = shiftPersons[personIndex];
-        currentSpeaker =
-          currentPerson.isEcho && currentPerson.echo_value
-            ? currentPerson.echo_value
-            : currentPerson;
+        currentSpeaker = currentPerson.isEcho && currentPerson.echo_value ? currentPerson.echo_value : currentPerson;
         if (currentPerson.isEcho) varManager.instVars.EchoTalks += 1;
       }
 
       chatHistory.length = 0;
       chatHistory.push(`[color=#aaaaaa][i]${callText()}[/i][/color]`);
-      if (currentSpeaker)
-        chatHistory.push(
-          `[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${generatePhrase("greetings")}`,
-        );
+      if (currentSpeaker) {
+        chatHistory.push(`[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${generatePhrase("greetings")}`);
+      }
       renderDialog();
 
       echoMistakes = 0;
       if (isCatFed) {
-        isCatFed = false;
         catState = 1;
         updateCatUI();
       }
@@ -930,27 +881,19 @@ runOnStartup((runtime) => {
 
       if (index === 0) {
         let sounds = [];
-        if (analyzer.precipitation)
-          sounds.push(`Осадки: ${analyzer.precipitation}`);
+        if (analyzer.precipitation) sounds.push(`Осадки: ${analyzer.precipitation}`);
         if (analyzer.wind) sounds.push(`Ветер: ${analyzer.wind}`);
         if (analyzer.engine) sounds.push(`Двигатель: ${analyzer.engine}`);
         if (analyzer.other_sounds) sounds.push(`Фон: ${analyzer.other_sounds}`);
-        deviceText =
-          sounds.length > 0 ? sounds.join(".\n") : "Фоновый шум не распознан.";
+        deviceText = sounds.length > 0 ? sounds.join(".\n") : "Фоновый шум не распознан.";
       } else if (index === 1) {
-        deviceText = realPerson.isEcho
-          ? generatePhrase("voice_analysis_echo")
-          : generatePhrase("voice_analysis_man");
+        deviceText = realPerson.isEcho ? generatePhrase("voice_analysis_echo") : generatePhrase("voice_analysis_man");
       } else if (index === 2) {
-        const realWeather = realPerson.weather
-          ? realPerson.weather.toLowerCase()
-          : "";
+        const realWeather = realPerson.weather ? realPerson.weather.toLowerCase() : "";
         deviceText = `Радар показывает: ${realWeather} в районе конечного пункта.`;
       }
 
-      deviceChatHistory.push(
-        `[color=#84e6a6][b]${DEVICE_NAMES[index]}:[/b][/color]\n${deviceText}`,
-      );
+      deviceChatHistory.push(`[color=#84e6a6][b]${DEVICE_NAMES[index]}:[/b][/color]\n${deviceText}`);
       renderDialog();
       void saveCheckpoint("action");
     }
@@ -962,38 +905,25 @@ runOnStartup((runtime) => {
     const shopCoffeeText = getOne("shopCoffeeText");
     const shopCatFoodText = getOne("shopCatFoodText");
     const shopMessageText = getOne("shopMessageText");
+    
     const SHOP_PART_NAMES = [
-      "shopPanel",
-      "shopTitleText",
-      "shopCreditsText",
-      "shopMessageText",
-      "shopCoffeeText",
-      "shopCatFoodText",
-      "shopCloseButton",
-      "shopCoffeeBuyButton",
-      "shopCatFoodBuyButton",
+      "shopPanel", "shopTitleText", "shopCreditsText", "shopMessageText",
+      "shopCoffeeText", "shopCatFoodText", "shopCloseButton", "shopCoffeeBuyButton", "shopCatFoodBuyButton",
     ];
     const shopParts = SHOP_PART_NAMES.flatMap(getAll);
 
-    let coffeeInStock =
-      (typeof restoredSave?.inventory?.coffeeInStock === "boolean"
-        ? restoredSave.inventory.coffeeInStock
-        : restoredSave?.coffeeInStock) === true;
+    let coffeeInStock = (typeof restoredSave?.inventory?.coffeeInStock === "boolean" ? restoredSave.inventory.coffeeInStock : restoredSave?.coffeeInStock) === true;
     let messageTimer = null;
 
     function showShopMessage(text) {
       if (!shopMessageText) return;
       shopMessageText.text = text;
       clearTimeout(messageTimer);
-      messageTimer = setTimeout(() => {
-        shopMessageText.text = "";
-      }, 1800);
+      messageTimer = setTimeout(() => { shopMessageText.text = ""; }, 1800);
     }
     function refreshShopTexts() {
-      if (shopCoffeeText)
-        shopCoffeeText.text = `Кофе (цена: ${COFFEE_PRICE})${coffeeInStock ? " — куплен" : ""}\nВосстанавливает 3 энергии`;
-      if (shopCatFoodText)
-        shopCatFoodText.text = `Кошачий корм (цена: ${CATFOOD_PRICE})\nЗапас: ${varManager.instVars.CatFood}/${CATFOOD_MAX}`;
+      if (shopCoffeeText) shopCoffeeText.text = `Кофе (цена: ${COFFEE_PRICE})${coffeeInStock ? " — куплен" : ""}\nВосстанавливает 3 энергии`;
+      if (shopCatFoodText) shopCatFoodText.text = `Кошачий корм (цена: ${CATFOOD_PRICE})\nЗапас: ${varManager.instVars.CatFood}/${CATFOOD_MAX}`;
     }
 
     const endText = {
@@ -1004,6 +934,7 @@ runOnStartup((runtime) => {
       echoTalks: "Разговоров с Эхо",
       energySpent: "Энергии потрачено",
     };
+    
     const endFields = [
       ["endArrivedText", endText.arrived, "CouriersArrived"],
       ["endLostText", endText.lost, "CouriersLost"],
@@ -1013,10 +944,9 @@ runOnStartup((runtime) => {
     ].map(([name, label, varName]) => ({ obj: getOne(name), label, varName }));
     const endTitleText = getOne("endTitleText");
 
-    const hintParts = ["hintPanel", "hintText", "hintCloseButton"].flatMap(
-      getAll,
-    );
+    const hintParts = ["hintPanel", "hintText", "hintCloseButton"].flatMap(getAll);
     const hintTextObject = getOne("hintText");
+    
     const HINT_MEMO_TEXT = `ПАМЯТКА ОПЕРАТОРА «МАЯКА»
 Перед началом смены ознакомьтесь с порядком работы!
 
@@ -1053,13 +983,13 @@ runOnStartup((runtime) => {
 Главное правило — не доверяйте одному признаку.
 Сопоставляйте ответы, документы и звуковые улики. Даже привычные вещи вокруг могут оказаться не такими надёжными, как кажется.
 «Маяк» — последняя линия связи. Будьте внимательны к каждому вызову.`;
+    
     if (hintTextObject) hintTextObject.text = HINT_MEMO_TEXT;
 
-    // Native, touch-friendly HTML scroll area positioned over the in-game memo.
-    // The game canvas remains responsible for the panel and close button.
     let hintScrollerElement = null;
     let hintScrollerCanvas = null;
     let hintScrollerPositionHandler = null;
+    
     function positionHintScroller() {
       if (!hintScrollerElement || !hintScrollerCanvas) return;
       const rect = hintScrollerCanvas.getBoundingClientRect();
@@ -1082,24 +1012,12 @@ runOnStartup((runtime) => {
       scroller.setAttribute("role", "region");
       scroller.tabIndex = 0;
       Object.assign(scroller.style, {
-        position: "fixed",
-        zIndex: "999999",
-        overflowY: "auto",
-        overflowX: "hidden",
-        boxSizing: "border-box",
-        padding: "0 18px 24px 0",
-        margin: "0",
-        color: "rgba(230, 242, 230, 1)",
-        background: "transparent",
-        fontFamily: "Arial, sans-serif",
-        fontWeight: "400",
-        lineHeight: "1.28",
-        whiteSpace: "pre-wrap",
-        overflowWrap: "break-word",
-        overscrollBehavior: "contain",
-        touchAction: "pan-y",
-        scrollbarWidth: "thin",
-        scrollbarColor: "rgba(190, 210, 190, .8) transparent",
+        position: "fixed", zIndex: "999999", overflowY: "auto", overflowX: "hidden",
+        boxSizing: "border-box", padding: "0 18px 24px 0", margin: "0",
+        color: "rgba(230, 242, 230, 1)", background: "transparent",
+        fontFamily: "Arial, sans-serif", fontWeight: "400", lineHeight: "1.28",
+        whiteSpace: "pre-wrap", overflowWrap: "break-word", overscrollBehavior: "contain",
+        touchAction: "pan-y", scrollbarWidth: "thin", scrollbarColor: "rgba(190, 210, 190, .8) transparent",
         WebkitOverflowScrolling: "touch",
       });
       scroller.textContent = HINT_MEMO_TEXT;
@@ -1122,15 +1040,9 @@ runOnStartup((runtime) => {
       hintScrollerCanvas = null;
       hintScrollerPositionHandler = null;
     }
+
     const endParts = [
-      "endPanel",
-      "endTitleText",
-      "endArrivedText",
-      "endLostText",
-      "endZonesText",
-      "endEchoText",
-      "endEnergyText",
-      "endMenuButton",
+      "endPanel", "endTitleText", "endArrivedText", "endLostText", "endZonesText", "endEchoText", "endEnergyText", "endMenuButton",
     ].flatMap(getAll);
 
     const DESIGN_CX = 935;
@@ -1140,50 +1052,28 @@ runOnStartup((runtime) => {
     
     const hudButtons = [hintButton, settingsButton, saveNoticeText].filter(Boolean);
     const followParts = [...hudButtons, ...hintParts, ...endParts, ...shopParts];
-    const followOffsets = new Map(
-      followParts.map((o) => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }]),
-    );
-    
-    const fullscreenPanels = new Set([
-      ...getAll("hintPanel"),
-      ...getAll("endPanel"),
-    ]);
+    const followOffsets = new Map(followParts.map((o) => [o, { dx: o.x - DESIGN_CX, dy: o.y - DESIGN_CY }]));
+    const fullscreenPanels = new Set([...getAll("hintPanel"), ...getAll("endPanel")]);
 
     const baseSizes = new Map();
     shopParts.forEach((p) => {
-      baseSizes.set(p, {
-        x: p.x,
-        y: p.y,
-        w: p.width,
-        h: p.height,
-        fontSize: typeof p.fontSize === "number" ? p.fontSize : null,
-      });
+      baseSizes.set(p, { x: p.x, y: p.y, w: p.width, h: p.height, fontSize: typeof p.fontSize === "number" ? p.fontSize : null });
     });
 
     function viewRect(layer) {
       try {
         const vp = layer.getViewport();
-        return {
-          cx: vp.left + vp.width / 2,
-          cy: vp.top + vp.height / 2,
-          w: vp.width,
-          h: vp.height,
-        };
+        return { cx: vp.left + vp.width / 2, cy: vp.top + vp.height / 2, w: vp.width, h: vp.height };
       } catch (e) {
         const hw = 960, hh = 540;
         const cx = cameraObj ? cameraObj.x : DESIGN_CX;
         const cy = cameraObj ? cameraObj.y : DESIGN_CY;
-        return {
-          cx: Math.min(Math.max(cx, hw), runtime.layout.width - hw),
-          cy: Math.min(Math.max(cy, hh), runtime.layout.height - hh),
-          w: 1920, h: 1080,
-        };
+        return { cx: Math.min(Math.max(cx, hw), runtime.layout.width - hw), cy: Math.min(Math.max(cy, hh), runtime.layout.height - hh), w: 1920, h: 1080 };
       }
     }
 
     function centerPartsOnScreen(parts) {
       const cachedViews = new Map();
-      
       const shopPanel = getOne("shopPanel");
       const isShopOpen = runtime.globalVars.shopOpen === 1;
       
@@ -1208,39 +1098,22 @@ runOnStartup((runtime) => {
         const off = followOffsets.get(p);
 
         if (fullscreenPanels.has(p)) {
-          // Для экрана итогов и подсказок
-          p.x = view.cx;
-          p.y = view.cy;
-          p.width = view.w + 4;
-          p.height = view.h + 4;
+          p.x = view.cx; p.y = view.cy; p.width = view.w + 4; p.height = view.h + 4;
         } else if (isShopOpen && baseSizes.has(p)) {
-          // ДЛЯ ВСЕХ ЭЛЕМЕНТОВ МАГАЗИНА: масштабируем пропорционально
           const base = baseSizes.get(p);
-          
           if (p === shopPanel) {
-            // Сам фон на весь экран
-            p.x = view.cx;
-            p.y = view.cy;
-            p.width = view.w;
-            p.height = view.h;
+            p.x = view.cx; p.y = view.cy; p.width = view.w; p.height = view.h;
           } else {
-            // Остальные элементы масштабируются относительно центра фона
             const relX = base.x - basePanelX;
             const relY = base.y - basePanelY;
-            
             p.x = view.cx + relX * shopScaleX;
             p.y = view.cy + relY * shopScaleY;
             p.width = base.w * shopScaleX;
             p.height = base.h * shopScaleY;
-            
-            if (base.fontSize) {
-              p.fontSize = Math.max(1, base.fontSize * Math.min(shopScaleX, shopScaleY));
-            }
+            if (base.fontSize) p.fontSize = Math.max(1, base.fontSize * Math.min(shopScaleX, shopScaleY));
           }
         } else if (off) {
-          // Для остального HUD
-          p.x = view.cx + off.dx;
-          p.y = view.cy + off.dy;
+          p.x = view.cx + off.dx; p.y = view.cy + off.dy;
         }
       });
     }
@@ -1278,8 +1151,7 @@ runOnStartup((runtime) => {
         p.isVisible = true;
         if (typeof p.moveToTop === "function") p.moveToTop();
       });
-      if (typeof shopMessageText?.moveToTop === "function")
-        shopMessageText.moveToTop();
+      if (typeof shopMessageText?.moveToTop === "function") shopMessageText.moveToTop();
       if (shopMessageText) shopMessageText.text = "";
       refreshShopTexts();
     }
@@ -1287,9 +1159,7 @@ runOnStartup((runtime) => {
     function closeShop() {
       if (runtime.globalVars.shopOpen === 0) return;
       runtime.globalVars.shopOpen = 0;
-      shopParts.forEach((p) => {
-        p.isVisible = false;
-      });
+      shopParts.forEach((p) => { p.isVisible = false; });
       uiToHideInShop.forEach((b) => {
         b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
       });
@@ -1327,9 +1197,7 @@ runOnStartup((runtime) => {
 
     function closeOverlay(kind, parts) {
       if (overlay !== kind) return;
-      parts.forEach((p) => {
-        p.isVisible = false;
-      });
+      parts.forEach((p) => { p.isVisible = false; });
       gameDomButtons.forEach((b) => {
         b.isVisible = savedDomVisibility.has(b) ? savedDomVisibility.get(b) : true;
       });
@@ -1337,12 +1205,8 @@ runOnStartup((runtime) => {
       overlay = null;
     }
 
-    const playClick = () => {
-      try { runtime.callFunction("PlayClick"); } catch (e) {}
-    };
-    function goToStartMenu() {
-      runtime.goToLayout(MENU_LAYOUT);
-    }
+    const playClick = () => { try { runtime.callFunction("PlayClick"); } catch (e) {} };
+    function goToStartMenu() { runtime.goToLayout(MENU_LAYOUT); }
 
     const openHint = () => {
       const opened = openOverlay("hint", hintParts);
@@ -1375,45 +1239,45 @@ runOnStartup((runtime) => {
     if (hintButton)
       hintButton.addEventListener("click", () => {
         if (overlay || runtime.globalVars.isTransitioning === 1) return;
-        playClick();
-        openHint();
+        playClick(); openHint();
       });
     if (hintCloseButton)
-      hintCloseButton.addEventListener("click", () => {
-        playClick();
-        closeHint();
-      });
+      hintCloseButton.addEventListener("click", () => { playClick(); closeHint(); });
 
-    const radioClickAllowed = () =>
-      runtime.globalVars.isTransitioning !== 1 &&
-      runtime.globalVars.shopOpen !== 1 &&
-      !overlay;
+    const radioClickAllowed = () => runtime.globalVars.isTransitioning !== 1 && runtime.globalVars.shopOpen !== 1 && !overlay;
 
     if (askButton)
       askButton.addEventListener("click", () => {
         if (!radioClickAllowed()) return;
         playClick();
-        if (dialogTab === "questions") dialogTab = "radio";
-        else dialogTab = "questions";
+        dialogTab = dialogTab === "questions" ? "radio" : "questions";
         hoveredQuestion = -1;
         renderDialog();
       });
 
+    // БАГ-ФИКС: Обновлена логика статистики. 
+    // Передача координат: Эхо -> Потеря зоны, Реальный -> Курьер дошел.
     if (transferButton)
       transferButton.addEventListener("click", () => {
         if (!radioClickAllowed()) return;
         playClick();
-        if (!currentPerson.isEcho) varManager.instVars.CouriersArrived += 1;
-        else varManager.instVars.ZonesLost += 1;
+        if (currentPerson.isEcho) {
+            varManager.instVars.ZonesLost += 1;
+        } else {
+            varManager.instVars.CouriersArrived += 1;
+        }
         try { globalThis.sideEcho?.onDecision?.("transfer", callNumber); } catch (e) {}
         startNextCall();
       });
 
+    // Отказ: Реальный -> Курьер потерян. Эхо -> Ничего не происходит.
     if (declineButton)
       declineButton.addEventListener("click", () => {
         if (!radioClickAllowed()) return;
         playClick();
-        if (!currentPerson.isEcho) varManager.instVars.CouriersLost += 1;
+        if (!currentPerson.isEcho) {
+            varManager.instVars.CouriersLost += 1;
+        }
         try { globalThis.sideEcho?.onDecision?.("decline", callNumber); } catch (e) {}
         startNextCall();
       });
@@ -1433,19 +1297,16 @@ runOnStartup((runtime) => {
           } catch (e) {}
         }
         if (saved) goToStartMenu();
-        else {
-          leavingToMenu = false;
-          settingsButton.isEnabled = true;
-        }
+        else { leavingToMenu = false; settingsButton.isEnabled = true; }
       });
 
     if (endTempButton)
       endTempButton.addEventListener("click", () => {
         if (overlay || runtime.globalVars.isTransitioning === 1) return;
-        playClick();
-        openEndScreen();
+        playClick(); openEndScreen();
       });
 
+    // БАГ-ФИКС: Удаляем сейв при выходе в меню с экрана итогов
     if (endMenuButton)
       endMenuButton.addEventListener("click", async () => {
         playClick();
@@ -1461,69 +1322,65 @@ runOnStartup((runtime) => {
 
     onRuntime("tick2", () => {
       if (runtime.globalVars.shopOpen === 1) centerPartsOnScreen(shopParts);
+      
       if (startHintTicks > 0 && --startHintTicks === 0) {
         if (!overlay && (runtime.globalVars.isTransitioning === 1 || !openHint())) startHintTicks = 1;
       }
+      
       if (saveNoticeText?.isVisible) {
         const remaining = saveNoticeExpires - Date.now();
         if (remaining <= 0) saveNoticeText.isVisible = false;
         else saveNoticeText.opacity = Math.min(1, remaining / 550);
       }
+      
       if (hudButtons.length) {
         const view = viewRect(hudButtons[0].layer);
         if (view.cx !== lastHudX || view.cy !== lastHudY) {
-          lastHudX = view.cx;
-          lastHudY = view.cy;
+          lastHudX = view.cx; lastHudY = view.cy;
           for (const button of hudButtons) {
             const offset = followOffsets.get(button);
-            button.x = view.cx + offset.dx;
-            button.y = view.cy + offset.dy;
+            button.x = view.cx + offset.dx; button.y = view.cy + offset.dy;
           }
         }
       }
+      
       if (changeFrameButton) {
         const view = viewRect(changeFrameButton.layer);
         const offsetX = runtime.globalVars.roomSelect === 1 ? 865 : -950;
-        changeFrameButton.x = view.cx + offsetX;
-        changeFrameButton.y = view.cy - 200;
+        changeFrameButton.x = view.cx + offsetX; changeFrameButton.y = view.cy - 200;
       }
+      
+      // БАГ-ФИКС: Таймер злости кошки
       if (catState === 2) {
         catAngryTimer -= runtime.dt;
         if (catAngryTimer <= 0) {
           catState = 0;
+          isCatFed = false; // Кошка уходит
           updateCatUI();
+          void saveCheckpoint("action");
         }
       }
+      
       if (listPanel?.isVisible) renderListChecks();
       if (varManager.instVars.Energy !== lastDisplayedEnergy) updateEnergyUI();
       if (varManager.instVars.Credits !== lastDisplayedCredits) updateCreditsUI();
       if (varManager.instVars.Energy <= 0 && !isGameOver && !overlay && runtime.globalVars.isTransitioning === 0) {
-        isGameOver = true;
-        openEndScreen();
+        isGameOver = true; openEndScreen();
       }
     });
 
-    if (shopButton)
-      shopButton.addEventListener("click", () => {
-        if (runtime.globalVars.isTransitioning === 1) return;
-        openShop();
-      });
-    if (shopCloseButton)
-      shopCloseButton.addEventListener("click", () => {
-        if (runtime.globalVars.isTransitioning === 1) return;
-        closeShop();
-      });
+    if (shopButton) shopButton.addEventListener("click", () => { if (runtime.globalVars.isTransitioning === 1) return; openShop(); });
+    if (shopCloseButton) shopCloseButton.addEventListener("click", () => { if (runtime.globalVars.isTransitioning === 1) return; closeShop(); });
+    
     if (shopCoffeeBuyButton)
       shopCoffeeBuyButton.addEventListener("click", () => {
         if (runtime.globalVars.shopOpen === 0 || coffeeInStock || varManager.instVars.Credits < COFFEE_PRICE) return;
-        varManager.instVars.Credits -= COFFEE_PRICE;
-        coffeeInStock = true;
-        updateCreditsUI();
-        showShopMessage("Кофе куплен");
-        refreshShopTexts();
+        varManager.instVars.Credits -= COFFEE_PRICE; coffeeInStock = true;
+        updateCreditsUI(); showShopMessage("Кофе куплен"); refreshShopTexts();
         void saveCheckpoint("purchase");
       });
 
+    // БАГ-ФИКС: При покупке корма кошка сразу появляется
     if (shopCatFoodBuyButton)
       shopCatFoodBuyButton.addEventListener("click", () => {
         if (runtime.globalVars.shopOpen === 0 || varManager.instVars.CatFood >= CATFOOD_MAX || varManager.instVars.Credits < CATFOOD_PRICE) return;
@@ -1534,16 +1391,12 @@ runOnStartup((runtime) => {
         updateCatUI();
         showShopMessage("Корм куплен. Кошка теперь с тобой.");
         void saveCheckpoint("action");
-        updateCreditsUI();
-        refreshShopTexts();
+        updateCreditsUI(); refreshShopTexts();
       });
 
     onRuntime("keydown", (e) => {
       if (e.key !== "Escape") return;
-      if (overlay === "hint") {
-        closeHint();
-        return;
-      }
+      if (overlay === "hint") { closeHint(); return; }
       if (overlay) return;
       closeShop();
     });
@@ -1554,8 +1407,7 @@ runOnStartup((runtime) => {
         if (runtime.globalVars.isTransitioning === 1 || runtime.globalVars.shopOpen === 1 || !coffeeInStock) return;
         coffeeInStock = false;
         varManager.instVars.Energy = Math.min(MAX_ENERGY, varManager.instVars.Energy + COFFEE_RESTORE);
-        updateEnergyUI();
-        coffeeButton.isVisible = false;
+        updateEnergyUI(); coffeeButton.isVisible = false;
         void saveCheckpoint("action");
       });
     }
@@ -1563,18 +1415,12 @@ runOnStartup((runtime) => {
     energyButtons.forEach((button, index) => {
       button.addEventListener("click", () => {
         if (isGameOver || runtime.globalVars.isTransitioning === 1 || runtime.globalVars.shopOpen === 1) return;
-
-        if (devicesUsed[index]) {
-          dialogTab = "devices";
-          renderDialog();
-          return;
-        }
+        if (devicesUsed[index]) { dialogTab = "devices"; renderDialog(); return; }
 
         const cost = energyCosts[index] || 1;
         if (varManager.instVars.Energy < cost) {
           if (dialogText) {
-            dialogTab = "devices";
-            renderDialog();
+            dialogTab = "devices"; renderDialog();
             deviceChatHistory.push(`[color=#ff6666]Недостаточно энергии.[/color]`);
           }
           return;
@@ -1608,35 +1454,27 @@ runOnStartup((runtime) => {
     const listParts = [...listRowTexts, ...listCheckCells, ...listCrossCells];
     const setListParts = (visible) => listParts.forEach((p) => { p.isVisible = visible; });
 
-    const checklistTexts = Array.isArray(config.checklist) && config.checklist.length
-        ? config.checklist
-        : ["Есть в списке?", "Совпадают данные?", "Совпадает погода?", "Совпадает фон?", "Однотипен голос?"];
+    const checklistTexts = Array.isArray(config.checklist) && config.checklist.length ? config.checklist : ["Есть в списке?", "Совпадают данные?", "Совпадает погода?", "Совпадает фон?", "Однотипен голос?"];
     listRowTexts.forEach((t, i) => { t.text = checklistTexts[i] ?? ""; });
 
     if (listPanel) listPanel.isVisible = false;
     if (listCloseButton) listCloseButton.isVisible = false;
     const checklistHistory = Object.create(null);
     const savedHistory = restoredSave?.checklistHistory;
+    
     if (savedHistory && typeof savedHistory === "object" && !Array.isArray(savedHistory)) {
       for (const [key, marks] of Object.entries(savedHistory)) {
         if (!/^[1-9]\d*$/.test(key) || !Array.isArray(marks)) continue;
-        checklistHistory[key] = listRowTexts.map((_, i) =>
-          marks[i] === 1 || marks[i] === 2 ? marks[i] : 0,
-        );
+        checklistHistory[key] = listRowTexts.map((_, i) => marks[i] === 1 || marks[i] === 2 ? marks[i] : 0);
       }
     }
-    const restoredMarks = Array.isArray(restoredSave?.listMarks)
-      ? restoredSave.listMarks
-      : (checklistHistory[String(callNumber)] ?? []);
-    const listMarks = listRowTexts.map((_, i) => {
-      const saved = restoredMarks[i];
-      return saved === 1 || saved === 2 ? saved : 0;
-    });
+    
+    const restoredMarks = Array.isArray(restoredSave?.listMarks) ? restoredSave.listMarks : (checklistHistory[String(callNumber)] ?? []);
+    const listMarks = listRowTexts.map((_, i) => { const saved = restoredMarks[i]; return saved === 1 || saved === 2 ? saved : 0; });
 
     function renderListChecks() {
       const setFrame = (cell, target) => {
-        cell.animationSpeed = 0;
-        cell.stopAnimation();
+        cell.animationSpeed = 0; cell.stopAnimation();
         if (cell.animationFrame !== target) cell.animationFrame = target;
       };
       listMarks.forEach((mark, i) => {
@@ -1647,41 +1485,24 @@ runOnStartup((runtime) => {
     renderListChecks();
     setListParts(false);
 
-    let saveRevision = Number.isSafeInteger(restoredSave?.revision) && restoredSave.revision >= 0
-        ? restoredSave.revision
-        : 0;
+    let saveRevision = Number.isSafeInteger(restoredSave?.revision) && restoredSave.revision >= 0 ? restoredSave.revision : 0;
 
     function makeCheckpoint() {
       const variables = {};
       for (const name of VAR_NAMES) variables[name] = varManager.instVars[name];
       const currentMarks = listMarks.slice();
-      const allCallMarks = Object.fromEntries(
-        Object.entries(checklistHistory).map(([call, marks]) => [call, marks.slice()]),
-      );
+      const allCallMarks = Object.fromEntries(Object.entries(checklistHistory).map(([call, marks]) => [call, marks.slice()]));
       allCallMarks[String(callNumber)] = currentMarks.slice();
       return {
-        version: 2,
-        revision: ++saveRevision,
-        savedAt: new Date().toISOString(),
-        variables,
-        roomSelect: runtime.globalVars.roomSelect === 1 ? 1 : 0,
-        coffeeInStock,
+        version: 2, revision: ++saveRevision, savedAt: new Date().toISOString(), variables,
+        roomSelect: runtime.globalVars.roomSelect === 1 ? 1 : 0, coffeeInStock,
         inventory: { coffeeInStock, catFood: varManager.instVars.CatFood },
         dialog: { tab: dialogTab === "questions" ? "radio" : dialogTab, device: currentDevice },
-        questionsAsked: questionsAsked.map(Boolean),
-        devicesUsed: devicesUsed.slice(),
-        chatHistory: chatHistory.slice(),
-        deviceChatHistory: deviceChatHistory.slice(),
-        callNumber,
-        currentPerson: currentPerson,
-        shiftPersons: shiftPersons,
-        listMarks: currentMarks,
-        checklistHistory: allCallMarks,
-        isShopDisabled: isShopDisabled,
-        catState: catState,
-        catAngryTimer: catAngryTimer,
-        isCatFed: isCatFed,
-        echoMistakes: echoMistakes,
+        questionsAsked: questionsAsked.map(Boolean), devicesUsed: devicesUsed.slice(), 
+        chatHistory: chatHistory.slice(), deviceChatHistory: deviceChatHistory.slice(),
+        callNumber, currentPerson: currentPerson, shiftPersons: shiftPersons,
+        listMarks: currentMarks, checklistHistory: allCallMarks, isShopDisabled: isShopDisabled,
+        catState: catState, catAngryTimer: catAngryTimer, isCatFed: isCatFed, echoMistakes: echoMistakes,
       };
     }
 
@@ -1689,20 +1510,13 @@ runOnStartup((runtime) => {
       if (!saveNoticeText || runtime.layout.name !== GAME_LAYOUT) return;
       saveNoticeText.text = text;
       saveNoticeText.colorRgb = isError ? [1, 0.38, 0.36] : [0.36, 1, 0.55];
-      saveNoticeText.opacity = 1;
-      saveNoticeText.isVisible = true;
+      saveNoticeText.opacity = 1; saveNoticeText.isVisible = true;
       saveNoticeExpires = Date.now() + (text === "." ? 500 : 3500);
       const view = viewRect(saveNoticeText.layer);
       const off = followOffsets.get(saveNoticeText);
-      if (off) {
-        saveNoticeText.x = view.cx + off.dx;
-        saveNoticeText.y = view.cy + off.dy;
-      }
+      if (off) { saveNoticeText.x = view.cx + off.dx; saveNoticeText.y = view.cy + off.dy; }
     }
-    if (newGameSaveWarning) {
-      showSaveNotice(newGameSaveWarning, true);
-      newGameSaveWarning = "";
-    }
+    if (newGameSaveWarning) { showSaveNotice(newGameSaveWarning, true); newGameSaveWarning = ""; }
 
     function saveCheckpoint(reason) {
       if (!["purchase", "new-call", "settings", "shop-closed", "action"].includes(reason)) return Promise.resolve(false);
@@ -1744,29 +1558,20 @@ runOnStartup((runtime) => {
       }
 
       if (isPointerOver(dialogTabRadio, e.clientX, e.clientY)) {
-        if (dialogTab !== "radio" && dialogTab !== "questions") {
-          dialogTab = "radio"; hoveredQuestion = -1; renderDialog();
-        }
+        if (dialogTab !== "radio" && dialogTab !== "questions") { dialogTab = "radio"; hoveredQuestion = -1; renderDialog(); }
         return;
       }
       if (isPointerOver(dialogTabDevices, e.clientX, e.clientY)) {
-        if (dialogTab !== "devices") {
-          dialogTab = "devices"; hoveredQuestion = -1; renderDialog();
-        }
+        if (dialogTab !== "devices") { dialogTab = "devices"; hoveredQuestion = -1; renderDialog(); }
         return;
       }
       if (isPointerOver(dialogTabMail, e.clientX, e.clientY)) {
-        if (dialogTab !== "mail") {
-          dialogTab = "mail"; hoveredQuestion = -1; renderDialog();
-        }
+        if (dialogTab !== "mail") { dialogTab = "mail"; hoveredQuestion = -1; renderDialog(); }
         return;
       }
 
       const clickedQuestion = questionAt(e.clientX, e.clientY);
-      if (clickedQuestion >= 0) {
-        askQuestion(clickedQuestion);
-        return;
-      }
+      if (clickedQuestion >= 0) { askQuestion(clickedQuestion); return; }
       if (!listPanel.isVisible) return;
 
       if (isPointerOver(listCloseButton, e.clientX, e.clientY)) {
@@ -1780,18 +1585,19 @@ runOnStartup((runtime) => {
         if (isPointerOver(listCheckCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 1 ? 0 : 1;
           renderListChecks();
+          void saveCheckpoint("action"); // БАГ-ФИКС: Сохранение после клика по чек-листу
           break;
         }
         if (isPointerOver(listCrossCells[i], e.clientX, e.clientY)) {
           listMarks[i] = listMarks[i] === 2 ? 0 : 2;
           renderListChecks();
+          void saveCheckpoint("action"); // БАГ-ФИКС: Сохранение после клика по чек-листу
+          
           if (listMarks[i] === 2) {
             if (catState === 1) {
               echoMistakes++;
               if (echoMistakes >= 2) {
-                catState = 2;
-                catAngryTimer = 5;
-                updateCatUI();
+                catState = 2; catAngryTimer = 5; updateCatUI();
                 showSaveNotice("Кошка зашипела!", true);
                 void saveCheckpoint("action");
               }
@@ -1815,53 +1621,28 @@ runOnStartup((runtime) => {
 
     if (!restoredSave && chatHistory.length === 0) {
       chatHistory.push(`[color=#aaaaaa][i]${callText()}[/i][/color]`);
-      if (currentSpeaker)
-        chatHistory.push(
-          `[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${generatePhrase("greetings")}`,
-        );
+      if (currentSpeaker) chatHistory.push(`[color=#84e6a6][b]${currentSpeaker.name}:[/b][/color]\n${generatePhrase("greetings")}`);
     }
 
-    updateEnergyUI();
-    updateCreditsUI();
-    refreshShopTexts();
-    renderDialog();
-    updateCatUI();
+    updateEnergyUI(); updateCreditsUI(); refreshShopTexts(); renderDialog(); updateCatUI();
 
     globalThis.sideEcho = {
       config: config,
-      addCredits: (amt) => {
-        varManager.instVars.Credits += amt;
-        updateCreditsUI();
-      },
-      spendCredits: (amt) => {
-        varManager.instVars.Credits -= amt;
-        updateCreditsUI();
-      },
-      openShop,
-      closeShop,
-      openHint,
-      closeHint,
-      openEndScreen,
-      addStat: (name, amt = 1) => {
-        if (name in varManager.instVars) varManager.instVars[name] += amt;
-      },
+      addCredits: (amt) => { varManager.instVars.Credits += amt; updateCreditsUI(); },
+      spendCredits: (amt) => { varManager.instVars.Credits -= amt; updateCreditsUI(); },
+      openShop, closeShop, openHint, closeHint, openEndScreen,
+      addStat: (name, amt = 1) => { if (name in varManager.instVars) varManager.instVars[name] += amt; },
       onNewCall: startNextCall,
       getCallNumber: () => callNumber,
-      questions: {
-        list: questions,
-        asked: questionsAsked,
-        reset: resetQuestions,
-      },
+      questions: { list: questions, asked: questionsAsked, reset: resetQuestions },
       onQuestionAsked: null,
       onDecision: null,
     };
 
     cleanup = () => {
       unmountHintScroller();
-      for (const [name, cb] of runtimeListeners)
-        runtime.removeEventListener(name, cb);
-      clearTimeout(creditsFlashTimer);
-      clearTimeout(messageTimer);
+      for (const [name, cb] of runtimeListeners) runtime.removeEventListener(name, cb);
+      clearTimeout(creditsFlashTimer); clearTimeout(messageTimer);
       if (globalThis.sideEcho?.onNewCall) delete globalThis.sideEcho;
     };
   });

@@ -3301,10 +3301,10 @@
 					"showing": true,
 					"locked": false,
 					"world": {
-						"x": 1767.4151611328125,
-						"y": 895.4650268554688,
-						"width": 170,
-						"height": 93,
+						"x": 1720,
+						"y": 696,
+						"width": 338,
+						"height": 191,
 						"originX": 0.5,
 						"originY": 0.5,
 						"color": [
