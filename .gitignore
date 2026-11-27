@@ -4,3 +4,4 @@
 *.c3p
 .DS_Store
 Thumbs.db
+savegame.json
