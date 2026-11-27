@@ -43,7 +43,7 @@
 				{
 					"type": "menuTitleText",
 					"properties": {
-						"text": "SIDE ECHO",
+						"text": "RAULE ECHO",
 						"enable-bbcode": false,
 						"font": "Arial",
 						"size": 94,
@@ -419,8 +419,8 @@
 					"showing": true,
 					"locked": false,
 					"world": {
-						"x": 390,
-						"y": 406,
+						"x": 314.8720703125,
+						"y": 407.89337158203125,
 						"width": 1140,
 						"height": 190,
 						"originX": 0,

@@ -83,6 +83,7 @@ runOnStartup((runtime) => {
     }
     return configPromise;
   }
+  
 
   function storageOperation(action) {
     queuedStorage = queuedStorage.catch(() => {}).then(action);
